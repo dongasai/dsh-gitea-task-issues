@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Gitea task issues">
+  <rect x="1" y="1" width="30" height="30" rx="7" fill="#609926" fill-opacity="0.12" />
+  <path d="M8.4 9.6h15.2" stroke="#609926" stroke-width="1.6" stroke-linecap="round" />
+  <circle cx="10.7" cy="15.2" r="1.9" fill="none" stroke="#609926" stroke-width="1.5" />
+  <path d="M10 15.2l.7.8 1.5-1.7" fill="none" stroke="#609926" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M15.4 15.2h8.2" stroke="#609926" stroke-width="1.6" stroke-linecap="round" />
+  <circle cx="10.7" cy="21.6" r="1.9" fill="none" stroke="#609926" stroke-width="1.5" />
+  <path d="M15.4 21.6h8.2" stroke="#609926" stroke-width="1.6" stroke-linecap="round" />
+</svg>

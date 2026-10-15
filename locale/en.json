@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Gitea task issues",
+    "description": "Bind a workspace to a Gitea repository: manage issues, comments, assets, assignees, dependencies, subscription, pin, labels, lock and times from the global board and the right sidebar, plus a gitea_* tool set for the model."
+  }
+}

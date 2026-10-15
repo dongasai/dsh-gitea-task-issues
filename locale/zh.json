@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Gitea 任务 issues",
+    "description": "把工作区绑到 Gitea 仓库：全局看板 + 右侧栏看板里增删改查 issues、评论、附件、指派、依赖、订阅、Pin、Label、Lock 与工时；模型侧另有一套 gitea_* 工具。"
+  }
+}
