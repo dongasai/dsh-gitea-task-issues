@@ -24,8 +24,9 @@
  * ## 把一条 issue 发到对话输入框
  *
  * **工作区看板**的列表每行（行尾的小按钮）与详情页动作行各有一个 **「发送到 DSH」**：把这条
- * issue 拼成「`请处理 Gitea issue #12：标题` + 网址」的提示词，插进**这个会话**的对话输入框
- * （光标留在末尾的新行上，方便接着补自己的要求）。写入面与 `dsh-editor` 同一套：
+ * issue 拼成一行「`请处理 Gitea issue #12：标题`」，插进**这个会话**的对话输入框（光标留在
+ * 末尾的新行上，方便接着补自己的要求）。**不带网址**：工作区隔离下模型只能看当前工作区绑定的
+ * 那个仓库，网址是多余的噪音（用户明确要求去掉）。写入面与 `dsh-editor` 同一套：
  * `conversation.input.dock` 注册一个渲染 `null` 的哨兵，挂载时把该会话的 `inputActions`
  * 记进模块级 `inputTargets`；侧栏渲染点真传了 `inputActions` prop 就优先用它。
  *
@@ -666,18 +667,18 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 把一条 issue 拼成要插进对话输入框的提示词：一行「请处理 …」，有网址再跟一行网址。
+     * 把一条 issue 拼成要插进对话输入框的提示词：**只有一行**「请处理 Gitea issue #12：标题」。
      *
-     * **尾随换行是刻意的**：光标停在末尾的新行上，用户接着补自己的要求时不用先按回车；
-     * 多出来的那一行对模型侧无害（正文按行读）。
+     * **不带网址是刻意的**（用户明确要求）：工作区隔离下模型只能操作当前工作区绑定的那个仓库，
+     * `gitea_issue_get` 拿编号就够了，网址只是输入框里的噪音；要看网页版在详情页有「在浏览器打开」。
+     *
+     * **尾随换行也是刻意的**：光标停在末尾的新行上，用户接着补自己的要求时不用先按回车。
      * @param t - 文案函数。
-     * @param issue - 线上 issue 对象（只用 `index` / `title` / `htmlUrl`）。
-     * @returns 提示词字符串。
+     * @param issue - 线上 issue 对象（只用 `index` / `title`；`htmlUrl` 一概不用）。
+     * @returns 提示词字符串（末尾带一个换行）。
      */
     function issuePrompt(t, issue) {
-      const head = t('send.prompt', { index: issue.index, title: issue.title })
-      const url = typeof issue.htmlUrl === 'string' && issue.htmlUrl !== '' ? issue.htmlUrl : null
-      return url === null ? `${head}\n` : `${head}\n${url}\n`
+      return `${t('send.prompt', { index: issue.index, title: issue.title })}\n`
     }
 
     /**

@@ -311,7 +311,7 @@ function makeInputActions(options = {}) {
 const SEND_ROW = (index) => (node) => typeof node.props?.['data-gti-send'] === 'string' &&
   node.props['data-gti-send'].endsWith(`\u0000${index}`)
 
-test('发送到 DSH：列表行把「处理指令 + 网址」插进当前会话的输入框', async () => {
+test('发送到 DSH：列表行只把「请处理 issue #编号：标题」这一行插进输入框（不带网址）', async () => {
   const { fake, mini } = await newWorld()
   const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
   const InputSink = fake.slots.find((entry) => entry.options.name === 'conversation.input.dock').component
@@ -326,9 +326,9 @@ test('发送到 DSH：列表行把「处理指令 + 网址」插进当前会话�
   const send = findNode(mini, SEND_ROW(12))
   assert.ok(send, '列表行没有「发送到 DSH」按钮')
   send.props.onClick()
-  assert.equal(log.text,
-    '请处理 Gitea issue #12：第一个 issue\nhttp://localhost:3000/dongasai/mylike/issues/12\n',
-    '插进输入框的文本不对')
+  assert.equal(log.text, '请处理 Gitea issue #12：第一个 issue\n', '插进输入框的文本不对')
+  // 用户明确要求：**不带网址**（这条 issue 的 htmlUrl 是有的，仍然不该出现在提示词里）。
+  assert.doesNotMatch(log.text, /http/, '提示词里不该有网址')
   assert.ok(log.captures >= 1, '插入前必须先捕获选区（插入是捕获 + 草稿版本的 CAS）')
 
   text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
@@ -352,29 +352,10 @@ test('发送到 DSH：详情页动作行发的是当前这条 issue', async () =
   const send = findNode(mini, (node) => node.props?.['data-gti-send'] === 'true')
   assert.ok(send, '详情页动作行没有「发送到 DSH」')
   send.props.onClick()
-  assert.match(log.text ?? '', /^请处理 Gitea issue #12：第一个 issue\nhttp:\/\/localhost:3000\/dongasai\/mylike\/issues\/12\n$/)
+  assert.equal(log.text, '请处理 Gitea issue #12：第一个 issue\n')
   text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-2', inputActions: actions }))
   assert.deepEqual(mini.errors, [])
   assert.match(text, /已把 #12 发到对话输入框/)
-})
-
-test('发送到 DSH：issue 没有网址时就不带那一行', async () => {
-  const { fake, mini } = await newWorld()
-  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
-  const { actions, log } = makeInputActions()
-
-  // 第二条 issue 的 `htmlUrl` 临时抹掉：缺字段一律按「没有」渲染（约束 3）。
-  const original = FIXTURES.issues[1].htmlUrl
-  FIXTURES.issues[1].htmlUrl = null
-  try {
-    await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-3', inputActions: actions }))
-    const send = findNode(mini, SEND_ROW(13))
-    assert.ok(send, '第二条 issue 没有发送按钮')
-    send.props.onClick()
-    assert.equal(log.text, '请处理 Gitea issue #13：第二个 issue\n')
-  } finally {
-    FIXTURES.issues[1].htmlUrl = original
-  }
 })
 
 test('发送到 DSH：拿不到输入框 / 输入框正忙都亮横幅，不炸', async () => {
