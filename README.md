@@ -83,7 +83,7 @@ dsh plugin --profile web add git+https://github.com/dongasai/dsh-gitea-task-issu
 - `--profile` **必填**（不写直接报 `required option '--profile <name> not specified'`）。
 - **必须带 `git+` 或 `github:` 前缀**。`git@github.com:owner/repo.git` 这种 scp 写法不会被认成
   git spec，pnpm 会把它当路径，装出一条指向不存在目录的 `link:` 死链。
-- **钉版本**：URL 后加 `#`，例如 `...#0.1`（tag / 分支 / commit 都行；本仓库当前 tag 是 `0.1`）。
+- **钉版本**：URL 后加 `#`，例如 `...#0.2`（tag / 分支 / commit 都行；本仓库当前 tag 是 `0.2`）。
 - pnpm 默认会拦 `prepare` 等依赖构建脚本；本包**没有任何构建步骤**（`client.js` 是手写的浏览器
   bundle，由 Host 直接读盘发出），不会遇到。
 

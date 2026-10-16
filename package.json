@@ -1,6 +1,6 @@
 {
   "name": "@dongasai/dsh-gitea-task-issues",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Gitea issues for DeepSeek Harness: bind a workspace to a Gitea repository, then work the issue board in the global panel and the right sidebar, with a matching set of model-facing gitea_* tools.",
