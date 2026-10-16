@@ -65,6 +65,12 @@ window.__ModuleLoader__.load({
     /** 侧栏看板的状态筛选值。 */
     const STATES = ['open', 'closed', 'all']
 
+    /** 视图模式：泳道（默认，面板一打开就是分好泳道的全景）与列表。 */
+    const MODES = ['lanes', 'list']
+
+    /** 泳道分组维度（只在泳道模式下有意义）。 */
+    const GROUPS = ['state', 'assignee', 'label', 'milestone']
+
     /**
      * 对话输入框的写入面，按会话索引：`conversation.input.dock` 的哨兵挂载时登记、卸载即删。
      * 「发送到 DSH」优先用自己槽位上的 `inputActions` prop，prop 没有（侧栏渲染点不保证传全
@@ -101,6 +107,9 @@ window.__ModuleLoader__.load({
       'state.all': '全部',
 
       'filter.state': '状态',
+      // 按状态分泳道时状态筛选被接管（取数固定 all、控件置灰）：tooltip 讲原因，旁边短标签给可见解释。
+      'filter.stateLocked': '按状态分泳道时固定取「全部」状态：泳道本身就是状态维度',
+      'filter.stateLockedHint': '由泳道接管',
       'filter.keyword': '关键词',
       'filter.keywordPlaceholder': '搜标题与正文',
       'filter.owner': '所属',
@@ -115,6 +124,18 @@ window.__ModuleLoader__.load({
       'list.emptyHint': '换个状态或关键词试试，或者新建一条。',
       'list.loading': '正在读取 issues…',
       'list.partial': '部分服务器读取失败：{names}',
+
+      'view.mode': '视图模式',
+      'view.lanes': '泳道',
+      'view.list': '列表',
+      'view.group': '泳道分组',
+      'group.state': '状态',
+      'group.assignee': '指派',
+      'group.label': '标签',
+      'group.milestone': '里程碑',
+      'group.none.assignee': '未指派',
+      'group.none.label': '无标签',
+      'group.none.milestone': '无里程碑',
 
       'issue.new': '新建 issue',
       'issue.labels': '标签',
@@ -268,6 +289,10 @@ window.__ModuleLoader__.load({
       'state.all': 'All',
 
       'filter.state': 'State',
+      // With lanes grouped by state the state filter is taken over: tooltip explains why, a short
+      // visible label next to it keeps a greyed control from being a mystery.
+      'filter.stateLocked': 'Grouped by state, lanes always load every state: the lane is the state',
+      'filter.stateLockedHint': 'driven by lanes',
       'filter.keyword': 'Keyword',
       'filter.keywordPlaceholder': 'Search title and body',
       'filter.owner': 'Owner',
@@ -282,6 +307,18 @@ window.__ModuleLoader__.load({
       'list.emptyHint': 'Try another state or keyword, or file a new one.',
       'list.loading': 'Loading issues…',
       'list.partial': 'Some servers failed: {names}',
+
+      'view.mode': 'View mode',
+      'view.lanes': 'Swimlanes',
+      'view.list': 'List',
+      'view.group': 'Group lanes by',
+      'group.state': 'State',
+      'group.assignee': 'Assignee',
+      'group.label': 'Label',
+      'group.milestone': 'Milestone',
+      'group.none.assignee': 'Unassigned',
+      'group.none.label': 'No label',
+      'group.none.milestone': 'No milestone',
 
       'issue.new': 'New issue',
       'issue.labels': 'Labels',
@@ -491,6 +528,19 @@ window.__ModuleLoader__.load({
 .dsh-gti-split{display:flex;flex:1 1 auto;min-height:0}
 .dsh-gti-split-list{width:min(420px,42%);flex:none;border-right:.5px solid var(--dsw-alias-border-l1);display:flex;flex-direction:column;min-height:0}
 .dsh-gti-split-detail{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;min-height:0}
+/* 视图开关：泳道 / 列表分段控件 + 分组下拉（放在筛选条右端）。 */
+.dsh-gti-view{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.dsh-gti-seg{display:inline-flex;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,6px);overflow:hidden}
+.dsh-gti-seg-button{font:inherit;font-size:12px;line-height:16px;padding:3px 10px;border:none;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap}
+.dsh-gti-seg-button+.dsh-gti-seg-button{border-left:.5px solid var(--dsw-alias-border-l2)}
+.dsh-gti-seg-button:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2))}
+.dsh-gti-seg-button[data-active="true"]{background:var(--dsw-alias-interactive-bg-selected,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary);font-weight:600}
+/* 泳道：一条泳道一个分组盒，标题条吸顶，滚动时还知道自己在哪条泳道里。 */
+.dsh-gti-lane{margin:0 0 10px;border:.5px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-sm,6px)}
+.dsh-gti-lane-head{display:flex;align-items:center;gap:8px;padding:6px 10px;position:sticky;top:0;z-index:1;background:var(--dsw-alias-bg-layer-2);border-bottom:.5px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-sm,6px) var(--dsw-radius-sm,6px) 0 0}
+.dsh-gti-lane-title{min-width:0;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-gti-lane-count{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dsh-gti-lane-body{padding:2px 4px 6px}
 `
 
     /** 界面里用的极简图标（本 bundle 没有构建步骤，所以手画 SVG，不引图标库）。 */
@@ -776,19 +826,134 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 筛选条。
-     * @param props - `value` / `onChange` / `servers` / `showServer` / `showOwner` / `t`。
+     * 把 issues 分进泳道 —— **泳道模式的唯一分组逻辑**（列表模式不走这里）。
+     *
+     * 为什么在客户端分组：Gitea 的 issue 列表没有「按指派 / 标签聚簇」这种返回形状；一次取回
+     * 50 条自己分，比每个维度各发一次请求更省，切维度也不用重新取数。
+     *
+     * 一条 issue 可以同时落在多条泳道（多个指派 / 多个标签）—— 这是有意的：泳道是**视角**，
+     * 不是归属；否则「按指派分」会悄悄丢掉第二个负责人。没有任何值的 issue 落进「未指派 /
+     * 无标签 / 无里程碑」泳道，不会被漏掉。**空泳道不渲染**：默认视图受状态筛选约束（按状态
+     * 分泳道时反而是取全部，见两个看板里的 `stateLocked`），渲染一堆空盒子只是噪音。
+     * @param issues - 线上 issue 数组。
+     * @param group - 分组维度：`state` / `assignee` / `label` / `milestone`。
+     * @param t - 文案函数。
+     * @returns `[{ key, title, issues }]`；泳道顺序稳定（状态固定 open → closed，其余按标题排，
+     *   「无 X」那条垫底）。
      */
-    function FilterBar({ value, onChange, servers, showServer, showOwner, t, children }) {
+    function laneGroups(issues, group, t) {
+      const list = issues ?? []
+      const buckets = new Map()
+      const push = (key, title, issue) => {
+        const lane = buckets.get(key)
+        if (lane === undefined) buckets.set(key, { key, title, issues: [issue] })
+        else lane.issues.push(issue)
+      }
+      // 状态按固定顺序建桶：按标题排序会把 closed 排到 open 前面（字母序），不直观。
+      if (group === 'state') {
+        for (const state of ['open', 'closed']) {
+          for (const issue of list) if (issue.state === state) push(`state:${state}`, t(`state.${state}`), issue)
+        }
+        return [...buckets.values()]
+      }
+      const noneKey = `${group}:-`
+      for (const issue of list) {
+        const values = group === 'assignee'
+          ? (issue.assignees ?? [])
+          : group === 'label'
+            ? (issue.labels ?? [])
+            : (issue.milestone === null || issue.milestone === undefined ? [] : [issue.milestone])
+        const seen = new Set()
+        for (const value of values) {
+          const key = group === 'assignee' ? `assignee:${value.login}` : group === 'label' ? `label:${value.name}` : `milestone:${value.id}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          push(key, group === 'assignee' ? `@${value.login}` : group === 'label' ? value.name : value.title, issue)
+        }
+        if (values.length === 0) push(noneKey, t(`group.none.${group}`), issue)
+      }
+      return [...buckets.values()].sort((left, right) => {
+        if (left.key === noneKey) return 1
+        if (right.key === noneKey) return -1
+        return String(left.title).localeCompare(String(right.title))
+      })
+    }
+
+    /**
+     * 列表里的一行，外加可选的「发送到 DSH」按钮 —— 列表模式与泳道模式共用同一行。
+     *
+     * 「发送」按钮是行的**兄弟**而不是子节点：`IssueRow` 本身就是 `<button>`，交互元素不能
+     * 嵌套（真实浏览器里点里层会连带触发外层）。`onSend` 只有工作区看板传：全局看板是跨工作区
+     * 的视图，不碰别人的输入框。
+     * @param props - `issue` / `showRepo` / `selected` / `onOpen` / `onSend`（可选）/ `t`。
+     */
+    function IssueListRow({ issue, showRepo, selected, onOpen, onSend, t }) {
+      const row = h(IssueRow, { issue, showRepo, selected, onOpen, t })
+      if (typeof onSend !== 'function') return row
+      return h('div', { className: 'dsh-gti-row-wrap', 'data-gti-send-row': issueKey(issue) },
+        row,
+        h('button', {
+          type: 'button',
+          className: 'dsh-gti-send',
+          title: t('send.hint'),
+          'data-gti-send': issueKey(issue),
+          onClick: () => onSend(issue),
+        }, h(Icon, { name: 'send', size: 14 }),
+          h('span', { className: 'dsh-gti-send-label' }, t('send.action'))))
+    }
+
+    /**
+     * issue 列表的两种呈现：**泳道（默认）** 与扁平列表。
+     * @param props - `issues` / `mode` / `group` / `showRepo` / `selectedKey` / `onOpen` /
+     *   `onSend`（可选）/ `t`。
+     */
+    function IssueList({ issues, mode, group, showRepo, selectedKey, onOpen, onSend, t }) {
+      const row = (issue) => h(IssueListRow, {
+        key: issueKey(issue),
+        issue,
+        t,
+        showRepo,
+        selected: issueKey(issue) === selectedKey,
+        onOpen,
+        onSend,
+      })
+      if (mode !== 'lanes') {
+        return h('div', { className: 'dsh-gti-list', 'data-gti-list': 'list' }, issues.map(row))
+      }
+      return h('div', { className: 'dsh-gti-list', 'data-gti-list': 'lanes' },
+        laneGroups(issues, group, t).map((lane) => h('section', {
+          key: lane.key,
+          className: 'dsh-gti-lane',
+          'data-gti-lane': lane.key,
+        },
+          h('div', { className: 'dsh-gti-lane-head' },
+            h('span', { className: 'dsh-gti-lane-title' }, lane.title),
+            h('span', { className: 'dsh-gti-lane-count', 'data-gti-lane-count': lane.issues.length },
+              t('list.count', { n: lane.issues.length }))),
+          h('div', { className: 'dsh-gti-lane-body' }, lane.issues.map(row)))))
+    }
+
+    /**
+     * 筛选条。
+     * @param props - `value` / `onChange` / `servers` / `showServer` / `showOwner` / `stateLocked` /
+     *   `t` / `children`（放在条子最右边的视图开关）。
+     */
+    function FilterBar({ value, onChange, servers, showServer, showOwner, stateLocked, t, children }) {
       const set = (patch) => onChange({ ...value, ...patch })
       return h('div', { className: 'dsh-gti-bar', 'data-gti-filter': 'true' },
         h('label', { className: 'dsh-gti-note' }, t('filter.state')),
         h('select', {
           className: 'dsh-gti-select',
           value: value.state,
+          disabled: stateLocked === true,
+          title: stateLocked === true ? t('filter.stateLocked') : undefined,
           'data-gti-filter-state': 'true',
+          'data-gti-filter-state-locked': stateLocked === true ? 'true' : 'false',
           onChange: (event) => set({ state: event.target.value }),
         }, STATES.map((state) => h('option', { key: state, value: state }, t(`state.${state}`)))),
+        // 置灰控件旁边给一句可见解释：禁用元素的 `title` 在部分浏览器里根本弹不出来，别让控件变成哑巴。
+        stateLocked === true ? h('span', { className: 'dsh-gti-note', 'data-gti-state-locked': 'true' },
+          t('filter.stateLockedHint')) : null,
         showServer ? h('select', {
           className: 'dsh-gti-select',
           value: value.serverId ?? '',
@@ -812,6 +977,39 @@ window.__ModuleLoader__.load({
         }),
         h('span', { className: 'dsh-gti-spacer' }),
         children)
+    }
+
+    /**
+     * 视图开关：泳道 / 列表的分段控件，外加（泳道模式下的）分组维度下拉。
+     *
+     * 放在筛选条右端而不是标题栏：它和筛选一样是「看哪一部分」的控制，标题栏留给写操作
+     * （新建 / 绑定设置 / 刷新）。
+     * @param props - `mode` / `group` / `onMode` / `onGroup` / `t`。
+     */
+    function ViewControls({ mode, group, onMode, onGroup, t }) {
+      return h('div', { className: 'dsh-gti-view', 'data-gti-view': mode },
+        h('div', {
+          className: 'dsh-gti-seg',
+          role: 'group',
+          'aria-label': t('view.mode'),
+          'data-gti-mode-switch': 'true',
+        }, MODES.map((item) => h('button', {
+          key: item,
+          type: 'button',
+          className: 'dsh-gti-seg-button',
+          'data-gti-mode': item,
+          'data-active': mode === item ? 'true' : 'false',
+          title: t(`view.${item}`),
+          onClick: () => onMode(item),
+        }, t(`view.${item}`)))),
+        // 分组下拉只在泳道模式下出现：列表模式没有泳道可分，留着它只会让人以为选错了模式。
+        mode === 'lanes' ? h('select', {
+          className: 'dsh-gti-select',
+          value: group,
+          title: t('view.group'),
+          'data-gti-group': 'true',
+          onChange: (event) => onGroup(event.target.value),
+        }, GROUPS.map((item) => h('option', { key: item, value: item }, t(`group.${item}`)))) : null)
     }
 
     // ── issue 表单（新建 / 编辑共用） ───────────────────────────────────────
@@ -1766,13 +1964,21 @@ window.__ModuleLoader__.load({
       const { config, error: configError, reload: reloadConfig } = useConfig(api, t)
       const [view, setView] = React.useState({ kind: 'list' })
       const [filter, setFilter] = React.useState({ state: 'open', serverId: '', owner: '', q: '' })
+      /** 视图模式与泳道分组：默认「泳道 + 按状态」，面板一打开就是分好泳道的全景。 */
+      const [mode, setMode] = React.useState('lanes')
+      const [group, setGroup] = React.useState('state')
       const [keyword, setKeyword] = React.useState('')
       const [issues, setIssues] = React.useState(null)
       const [failed, setFailed] = React.useState([])
       const [error, setError] = React.useState(null)
       const debouncedKeyword = useDebounced(keyword)
 
-      const query = { ...filter, q: debouncedKeyword }
+      /**
+       * 按状态分泳道时状态筛选被接管：泳道**就是**状态维度，再叠一层状态筛选只会剩下一条泳道，
+       * 默认视图也就不成其为泳道了。所以取数固定 `all`、控件置灰（见 README）。
+       */
+      const stateLocked = mode === 'lanes' && group === 'state'
+      const query = { ...filter, state: stateLocked ? 'all' : filter.state, q: debouncedKeyword }
 
       const load = React.useCallback(async () => {
         if (config === null) return
@@ -1833,13 +2039,18 @@ window.__ModuleLoader__.load({
             onClick: () => void load(),
           }, h(Icon, { name: 'refresh' }))),
         h(FilterBar, {
-          value: { ...filter, q: keyword },
-          onChange: (next) => { setFilter({ state: next.state, serverId: next.serverId ?? '', owner: next.owner ?? '', q: filter.q }); setKeyword(next.q ?? '') },
+          value: { ...filter, state: query.state, q: keyword },
+          onChange: (next) => {
+            // 置灰期间控件不会发变更；真收到了（旧事件 / 测试直接派发）也不认，免得筛选项与数据对不上。
+            setFilter({ state: stateLocked ? filter.state : next.state, serverId: next.serverId ?? '', owner: next.owner ?? '', q: filter.q })
+            setKeyword(next.q ?? '')
+          },
           servers: config?.servers ?? [],
           showServer: true,
           showOwner: true,
+          stateLocked,
           t,
-        }),
+        }, h(ViewControls, { mode, group, onMode: setMode, onGroup: setGroup, t })),
         configError === null ? null : h(Banner, { tone: 'error', text: configError }),
         failed.length > 0 ? h(Banner, { tone: 'warn', text: t('list.partial', { names: failed.join('；') }) }) : null,
         error === null ? null : h(Banner, { tone: 'error', text: error }),
@@ -1847,14 +2058,15 @@ window.__ModuleLoader__.load({
           ? h(Loading, { t })
           : issues.length === 0
             ? h(Empty, { title: t('list.empty'), hint: t('list.emptyHint') })
-            : h('div', { className: 'dsh-gti-list' }, issues.map((issue) => h(IssueRow, {
-              key: issueKey(issue),
-              issue,
-              t,
+            : h(IssueList, {
+              issues,
+              mode,
+              group,
               showRepo: true,
-              selected: issueKey(issue) === selectedKey,
+              selectedKey,
               onOpen: (picked) => setView({ kind: 'detail', issue: picked }),
-            }))))
+              t,
+            }))
 
       if (view.kind === 'servers') {
         return h('div', { className: 'dsh-gti-root', 'data-gti-global': 'true' },
@@ -1939,12 +2151,19 @@ window.__ModuleLoader__.load({
       const [bindingError, setBindingError] = React.useState(null)
       const [view, setView] = React.useState({ kind: 'list' })
       const [filter, setFilter] = React.useState({ state: 'open', q: '' })
+      /** 视图模式与泳道分组：默认「泳道 + 按状态」（与全局看板同一套约定）。 */
+      const [mode, setMode] = React.useState('lanes')
+      const [group, setGroup] = React.useState('state')
       const [keyword, setKeyword] = React.useState('')
       const [issues, setIssues] = React.useState(null)
       const [error, setError] = React.useState(null)
       /** 「发送到 DSH」的结果横幅，列表页与详情页共用（详情页那次由 `sendNotice` 传下去）。 */
       const [send, setSend] = React.useState(null)
       const debouncedKeyword = useDebounced(keyword)
+
+      /** 按状态分泳道时状态筛选被接管（取数固定全部、控件置灰）：理由见 GlobalBoard 同名处。 */
+      const stateLocked = mode === 'lanes' && group === 'state'
+      const stateQuery = stateLocked ? 'all' : filter.state
 
       /**
        * 把一条 issue 发进当前会话的对话输入框。
@@ -2000,13 +2219,13 @@ window.__ModuleLoader__.load({
         setError(null)
         const result = await api.gitea('issue.list', {
           sessionId,
-          state: filter.state,
+          state: stateQuery,
           q: debouncedKeyword === '' ? undefined : debouncedKeyword,
           limit: 50,
         })
         if (result.ok) setIssues(result.data ?? [])
         else setError(failureText(t, result))
-      }, [api, t, sessionId, target?.serverId, target?.owner, target?.repo, filter.state, debouncedKeyword])
+      }, [api, t, sessionId, target?.serverId, target?.owner, target?.repo, stateQuery, debouncedKeyword])
 
       React.useEffect(() => { void load() }, [load])
 
@@ -2039,37 +2258,30 @@ window.__ModuleLoader__.load({
         }, h(Icon, { name: 'refresh' })))
 
       const filterBar = h(FilterBar, {
-        value: { ...filter, q: keyword },
-        onChange: (next) => { setFilter({ state: next.state, q: filter.q }); setKeyword(next.q ?? '') },
+        value: { ...filter, state: stateQuery, q: keyword },
+        onChange: (next) => {
+          // 与全局看板同一套：置灰期间不认状态变更，避免筛选项与已取回的数据对不上。
+          setFilter({ state: stateLocked ? filter.state : next.state, q: filter.q })
+          setKeyword(next.q ?? '')
+        },
+        stateLocked,
         t,
-      })
+      }, h(ViewControls, { mode, group, onMode: setMode, onGroup: setGroup, t }))
 
       const listBody = issues === null
         ? h(Loading, { t })
         : issues.length === 0
           ? h(Empty, { title: t('list.empty'), hint: t('list.emptyHint') })
-          : h('div', { className: 'dsh-gti-list' }, issues.map((issue) => h('div', {
-            key: issueKey(issue),
-            className: 'dsh-gti-row-wrap',
-            'data-gti-send-row': issueKey(issue),
-          },
-            h(IssueRow, {
-              issue,
-              t,
-              showRepo: false,
-              selected: view.kind === 'detail' && issueKey(view.issue) === issueKey(issue),
-              onOpen: (picked) => setView({ kind: 'detail', issue: picked }),
-            }),
-            // 发送按钮是行的**兄弟**而不是子节点：`IssueRow` 本身就是 `<button>`，
-            // 交互元素不能嵌套（真实浏览器里点里层会连带触发外层）。
-            h('button', {
-              type: 'button',
-              className: 'dsh-gti-send',
-              title: t('send.hint'),
-              'data-gti-send': issueKey(issue),
-              onClick: () => sendIssue(issue),
-            }, h(Icon, { name: 'send', size: 14 }),
-              h('span', { className: 'dsh-gti-send-label' }, t('send.action'))))))
+          : h(IssueList, {
+            issues,
+            mode,
+            group,
+            showRepo: false,
+            selectedKey: view.kind === 'detail' ? issueKey(view.issue) : null,
+            onOpen: (picked) => setView({ kind: 'detail', issue: picked }),
+            onSend: sendIssue,
+            t,
+          })
 
       if (view.kind === 'binding') {
         return h('div', { className: 'dsh-gti-root', 'data-gti-workspace': 'true' },

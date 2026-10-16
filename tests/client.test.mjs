@@ -267,13 +267,108 @@ test('筛选条改动会触发重新取数', async () => {
   const { fake, mini } = await newWorld()
   const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
   await mini.render(mini.React.createElement(GlobalBoard, {}))
+  // 默认是「泳道 + 按状态分组」，此时状态筛选被泳道接管（置灰、取全部）；
+  // 切到列表模式才恢复成普通筛选 —— 这一步本身就是下面那条用例的断言。
+  findNode(mini, (node) => node.props?.['data-gti-mode'] === 'list').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
   calls.length = 0
   const select = findNode(mini, (node) => node.props?.['data-gti-filter-state'] === 'true')
   assert.ok(select, '没有状态筛选')
+  assert.equal(select.props.disabled, false, '列表模式下状态筛选必须可用')
   select.props.onChange({ target: { value: 'closed' } })
   await mini.render(mini.React.createElement(GlobalBoard, {}))
   assert.ok(calls.some((call) => call.op === 'gitea.call' && call.params.params.state === 'closed'),
     `切到 closed 后没有重新取数：${JSON.stringify(calls)}`)
+})
+
+/** 当前渲染里所有泳道的 key（按渲染顺序）—— 泳道模式的探针锚点。 */
+function laneKeys(mini) {
+  return findNodes(mini, (node) => typeof node.props?.['data-gti-lane'] === 'string')
+    .map((node) => node.props['data-gti-lane'])
+}
+
+test('泳道模式：默认泳道 + 按状态分组，状态筛选被接管；切列表模式恢复扁平列表', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+
+  calls.length = 0
+  let text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.deepEqual(mini.errors, [])
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-list'] !== undefined).props['data-gti-list'], 'lanes',
+    '默认必须是泳道模式')
+  // 按状态分泳道时取数固定「全部」，否则「已关闭」那条泳道永远不会出现（fixtures 一 open 一 closed）。
+  assert.ok(calls.some((call) => call.op === 'gitea.call' && call.params.op === 'issue.search' && call.params.params.state === 'all'),
+    `按状态分泳道应先取全部状态：${JSON.stringify(calls)}`)
+  assert.deepEqual(laneKeys(mini), ['state:open', 'state:closed'])
+  assert.match(text, /第一个 issue/)
+  assert.match(text, /第二个 issue/)
+
+  const locked = findNode(mini, (node) => node.props?.['data-gti-filter-state'] === 'true')
+  assert.equal(locked.props.disabled, true, '状态与泳道维度重合时筛选要置灰')
+  assert.equal(locked.props.value, 'all')
+  // 置灰只有配一句可见解释才不算哑巴（禁用元素的 title 在部分浏览器里弹不出来）。
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-state-locked'] === 'true'),
+    '置灰的状态筛选旁边必须有可见解释')
+
+  // 切到列表模式：扁平列表回来、泳道消失、状态筛选可用，取数回到用户选的状态（默认进行中）。
+  calls.length = 0
+  findNode(mini, (node) => node.props?.['data-gti-mode'] === 'list').props.onClick()
+  text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.deepEqual(mini.errors, [])
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-list'] !== undefined).props['data-gti-list'], 'list')
+  assert.deepEqual(laneKeys(mini), [])
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-filter-state'] === 'true').props.disabled, false)
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-state-locked'] === 'true'), undefined)
+  assert.ok(calls.some((call) => call.op === 'gitea.call' && call.params.params.state === 'open'),
+    `列表模式应回到普通状态筛选：${JSON.stringify(calls)}`)
+})
+
+test('泳道模式：分组维度可切换（指派 / 标签 / 里程碑），没值的落「未指派 / 无标签 / 无里程碑」', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+
+  const groupOf = () => findNode(mini, (node) => node.props?.['data-gti-group'] === 'true')
+  assert.ok(groupOf(), '泳道模式下必须有分组维度下拉')
+  assert.equal(groupOf().props.value, 'state', '默认按状态分组')
+
+  groupOf().props.onChange({ target: { value: 'assignee' } })
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.deepEqual(mini.errors, [])
+  // fixtures：#12 指派 tester，#13 谁都没指派 —— 后者必须出现在「未指派」泳道里，不能被漏掉。
+  assert.deepEqual(laneKeys(mini), ['assignee:tester', 'assignee:-'])
+
+  groupOf().props.onChange({ target: { value: 'label' } })
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.deepEqual(mini.errors, [])
+  assert.deepEqual(laneKeys(mini), ['label:bug', 'label:-'])
+
+  groupOf().props.onChange({ target: { value: 'milestone' } })
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.deepEqual(mini.errors, [])
+  assert.deepEqual(laneKeys(mini), ['milestone:7', 'milestone:-'])
+
+  // 分组不再是状态 → 状态筛选交还用户（默认进行中）。
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-filter-state'] === 'true').props.disabled, false)
+})
+
+test('工作区看板：默认泳道模式，泳道里的行照样能发送到 DSH', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const { actions, log } = makeInputActions()
+
+  calls.length = 0
+  await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1', inputActions: actions }))
+  assert.deepEqual(mini.errors, [])
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-list'] !== undefined).props['data-gti-list'], 'lanes',
+    '工作区看板默认也必须是泳道模式')
+  assert.deepEqual(laneKeys(mini), ['state:open', 'state:closed'])
+  assert.ok(calls.some((call) => call.op === 'gitea.call' && call.params.op === 'issue.list' && call.params.params.state === 'all'))
+
+  const send = findNode(mini, SEND_ROW(12))
+  assert.ok(send, '泳道里的行尾也要有「发送到 DSH」')
+  send.props.onClick()
+  assert.equal(log.text, '请处理 Gitea issue #12：第一个 issue\n')
 })
 
 /** 在迷你 React 上一次渲染里找第一个满足条件的节点（含函数组件展开出来的宿主节点）。 */

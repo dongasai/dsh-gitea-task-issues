@@ -16,7 +16,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（41 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（44 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -39,7 +39,7 @@
 | [lib/aggregate.js](lib/aggregate.js) | 详情 / 仓库元信息的一揽子读取（桥与工具共用） |
 | [lib/errors.js](lib/errors.js) | `BridgeError` / `GiteaError` 与状态码映射 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 41 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 44 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 
@@ -96,6 +96,10 @@
     prop**（目录列的是类型并集）；两处都拿不到只亮横幅（`send.failed.input`），不抛错、不静默
     失败；`insertText` 返回 `false` 是「正忙」不是异常。**列表行的发送按钮必须是 `IssueRow`
     的兄弟节点**（`IssueRow` 本身是 `<button>`，交互元素嵌套时点里层会连带触发外层）。
+20. **泳道是默认视图，分组只在客户端做**（`laneGroups`，两个看板共用 `IssueList`）：一条 issue
+    可以同时落进多条泳道（多个指派 / 多个标签）——泳道是视角不是归属，别去重；空泳道不渲染。
+    **按状态分泳道时状态筛选被接管**（取数固定 `all` + 控件置灰，`stateLocked`）：泳道本身就是
+    状态维度，别把它改回「服务端按维度各查一次」，也别让筛选与已取回的数据对不上。
 
 ## 代码风格
 
