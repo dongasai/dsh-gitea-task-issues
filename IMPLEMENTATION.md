@@ -121,6 +121,37 @@ Gitea 的 issue 里嵌着 `repository`、`assignee`、`milestone.creator` 等整
 另外两个上游事实：`AddTimeOption.time` 单位是**秒**；`GET .../issues/{index}/comments` **没有
 `page` / `limit`**，只有 `since` / `before`（所以那个操作表项也不发分页参数）。
 
+## 「发送到 DSH」：为什么走哨兵，而不只信槽位 prop
+
+看板要往**当前会话的对话输入框**里插一段文本，这件事只有官方公开的 `InputActions`
+（`captureInsertion()` + `insertText(text, span)`）能做。问题是这个面**从哪儿拿**：
+
+- 工作区看板挂在 `sidebar.right.pane.tab`。slot catalog 说这个槽位有 `inputActions` 这个标准
+  prop，但目录列的是**类型并集** —— 某个渲染点可能只传子集（`dsh-editor` 就在
+  `sidebar.right.tab.document` 上因为没有 `useSessions` 而整块白屏过）。所以 prop 有就优先用，
+  但**不能只靠它**。
+- 兜底是 `conversation.input.dock` 上的一个**哨兵**：渲染 `null`，挂载时把
+  `sessionId → inputActions` 记进模块级 `inputTargets`，卸载即删（删除前先比对象：同一会话
+  重挂时，晚到的旧 cleanup 不能删掉新登记的那份）。那是官方自己（语音输入、目标栏）在用的
+  位置，这个面一定有。
+
+于是「发送」按 `槽位 prop → 哨兵表` 的顺序取写入面；两处都拿不到就只亮一条横幅
+（`send.failed.input`），**绝不让看板本身挂掉** —— 与「不假设槽位传了哪些 prop」同一条约束。
+
+另外三点是刻意的：
+
+1. **先 `captureInsertion()` 再 `insertText()`，两步挨着做**。插入是「捕获时的选区 + 草稿版本」
+   的 CAS，中间任何编辑都会让它返回 `false`；`false` 不当异常，而是「输入框正忙，再试一次」。
+2. **插的是普通文本，不是芯片**。公开面没有带结构化引用的插入；`请处理 Gitea issue #12：标题`
+   加一行网址，模型侧自己就能对到当前工作区绑定的仓库（`gitea_issue_*` 工具没有仓库参数）。
+   末尾多一个换行，光标落在新行上，用户接着补自己的要求不用先按回车。
+3. **列表行的发送按钮是行的兄弟节点**。`IssueRow` 本身就是 `<button>`，交互元素不能嵌套 ——
+   真实浏览器里点里层会连带触发外层（点「发送」顺手进了详情）。所以列表多一层
+   `.dsh-gti-row-wrap`，行与按钮并排。
+
+**只有工作区看板接线**：全局看板是跨工作区视图，不该往某个会话的输入框里写东西（探针断言
+全局看板里没有 `data-gti-send`）。
+
 ## 分页与上限
 
 Swagger 里**没有**任何 `limit` 的 `maximum`，实际上限来自 `GET /settings/api` 的

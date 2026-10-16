@@ -16,7 +16,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（36 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（42 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -39,7 +39,7 @@
 | [lib/aggregate.js](lib/aggregate.js) | 详情 / 仓库元信息的一揽子读取（桥与工具共用） |
 | [lib/errors.js](lib/errors.js) | `BridgeError` / `GiteaError` 与状态码映射 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 36 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 42 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 
@@ -91,6 +91,11 @@
 18. **`h(...)` 的子元素别多打一个 `)`**：`node --check` 只验语法，但括号/逗号错位会让整段变成
     逗号表达式或提前收口。改完大块 `h(...)` 之后跑一次 `node --test tests/client.test.mjs`，
     迷你 React 会把树渲染一遍，这类错误当场就炸。
+19. **往对话输入框写文本只走 `inputActions`**（公开面只有 `captureInsertion()` + `insertText()`）：
+    写入面按「槽位 prop → `conversation.input.dock` 哨兵登记的 `inputTargets`」取，**不能只信
+    prop**（目录列的是类型并集）；两处都拿不到只亮横幅（`send.failed.input`），不抛错、不静默
+    失败；`insertText` 返回 `false` 是「正忙」不是异常。**列表行的发送按钮必须是 `IssueRow`
+    的兄弟节点**（`IssueRow` 本身是 `<button>`，交互元素嵌套时点里层会连带触发外层）。
 
 ## 代码风格
 
@@ -134,6 +139,9 @@ node --check index.js && node --check client.js
   目标仓库只能来自当前工作区（**不要**加回 `server` / `repo` 参数）。
 - **改服务器/令牌/绑定的行为** → 同步 README 的「快速开始」第 2、3 步与排错表；
   动了 `servers.json` 的结构要同时动 `lib/store.js` 的 `coerceState`。
+- **动「发送到 DSH」**（提示词格式、入口位置、失败横幅）→ 同步 README 的「界面长什么样」、
+  「只能在浏览器里看的」第 15 条与「已知边界」，以及 [IMPLEMENTATION.md](IMPLEMENTATION.md)
+  的「发送到 DSH」一节；`tests/client.test.mjs` 里那五条用例跟着改。
 - **改文案键** → `zh` 与 `en` 一起改（探针会拦）。
 - **已知边界**写在 README 末尾；**没真正解决之前不要从文档里删掉**。
 

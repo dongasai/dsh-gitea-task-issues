@@ -19,7 +19,19 @@
  *    `sidebar.right.pane.tab` 有 `sessionId`，但别顺手去调它没保证的 `useSessions`；
  *    要什么就自己从 `ctx` 服务现读，读不到就降级提示（`dsh-editor` 的约束 18 踩过白屏）。
  * 3. **正文与列表只认 `lib/shape.js` 的字段集**。Gitea 的原始对象字段多且版本间会变，
- *    这里只消费瘦身后的字段；缺字段一律按「没有」渲染，不抛错。
+ *    这里只消费瘦身后的字段，缺字段一律按「没有」渲染，不抛错。
+ *
+ * ## 把一条 issue 发到对话输入框
+ *
+ * **工作区看板**的列表每行（行尾的小按钮）与详情页动作行各有一个 **「发送到 DSH」**：把这条
+ * issue 拼成「`请处理 Gitea issue #12：标题` + 网址」的提示词，插进**这个会话**的对话输入框
+ * （光标留在末尾的新行上，方便接着补自己的要求）。写入面与 `dsh-editor` 同一套：
+ * `conversation.input.dock` 注册一个渲染 `null` 的哨兵，挂载时把该会话的 `inputActions`
+ * 记进模块级 `inputTargets`；侧栏渲染点真传了 `inputActions` prop 就优先用它。
+ *
+ * 插进去的是**普通文本**：公开面 `InputActions` 只有 `insertText(text, span)`，带结构化引用的
+ * 那条路只对内开放。发完在面板上亮一条结果横幅；拿不到输入框（会话还没起来、对话区没打开）
+ * 或输入框正忙（正在提交 / 草稿刚被改过）时，横幅写清原因，**不静默失败**。
  *
  * 另外：这个 bundle 没有构建步骤，`h(...)` 手写、样式只挂本地 `<style>` 且只用主题令牌
  * （`--dsw-alias-*`），调试锚点一律走 `data-gti-*` 属性，不用 class 或可见文案当锚点。
@@ -51,6 +63,13 @@ window.__ModuleLoader__.load({
 
     /** 侧栏看板的状态筛选值。 */
     const STATES = ['open', 'closed', 'all']
+
+    /**
+     * 对话输入框的写入面，按会话索引：`conversation.input.dock` 的哨兵挂载时登记、卸载即删。
+     * 「发送到 DSH」优先用自己槽位上的 `inputActions` prop，prop 没有（侧栏渲染点不保证传全
+     * 标准 prop，见文件头注释）时从这里取；两处都拿不到就只亮横幅，不静默失败。
+     */
+    const inputTargets = new Map()
 
     /**
      * 简体中文文案（键集的事实来源）。
@@ -117,6 +136,14 @@ window.__ModuleLoader__.load({
       'issue.unsubscribe': '取消订阅',
       'issue.subscribed': '已订阅',
       'issue.deleted': '已删除',
+
+      // 「发送到 DSH」：拼进对话输入框的提示词 + 三种结局的横幅。
+      'send.action': '发送到 DSH',
+      'send.hint': '把这条 issue 插进当前会话的对话输入框',
+      'send.prompt': '请处理 Gitea issue #{index}：{title}',
+      'send.sent': '已把 #{index} 发到对话输入框',
+      'send.failed.input': '拿不到对话输入框：会话还没起来，或对话区没打开。',
+      'send.failed.busy': '输入框正忙（正在提交，或草稿刚被别处改过），请再试一次。',
 
       'comments.title': '评论',
       'comments.empty': '还没有评论。',
@@ -277,6 +304,14 @@ window.__ModuleLoader__.load({
       'issue.subscribed': 'Subscribed',
       'issue.deleted': 'Deleted',
 
+      // Send to DSH: the prompt inserted into the composer, plus the three outcomes.
+      'send.action': 'Send to DSH',
+      'send.hint': 'Insert this issue into the current conversation composer',
+      'send.prompt': 'Please handle Gitea issue #{index}: {title}',
+      'send.sent': 'Sent #{index} to the composer',
+      'send.failed.input': 'Composer unavailable: the session is not up yet, or the conversation is closed.',
+      'send.failed.busy': 'The composer is busy (submitting, or the draft just changed elsewhere) — try again.',
+
       'comments.title': 'Comments',
       'comments.empty': 'No comments yet.',
       'comments.placeholder': 'Say something… (Markdown supported)',
@@ -406,6 +441,14 @@ window.__ModuleLoader__.load({
 .dsh-gti-row-index{flex:none;font-family:var(--dsw-font-mono,ui-monospace,monospace);font-size:12px;color:var(--dsw-alias-label-tertiary)}
 .dsh-gti-row-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dsh-gti-row-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dsh-gti-row-wrap{display:flex;align-items:stretch;gap:2px;margin:2px 0}
+.dsh-gti-row-wrap>.dsh-gti-row{flex:1 1 auto;min-width:0;margin:0}
+.dsh-gti-send{flex:none;display:inline-flex;align-items:center;gap:4px;padding:0 6px;border:none;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;cursor:pointer;opacity:.5;white-space:nowrap}
+.dsh-gti-row-wrap:hover .dsh-gti-send,.dsh-gti-send:focus-visible{opacity:1}
+.dsh-gti-send:hover{color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2))}
+/* 文案只在悬停 / 聚焦时显形：行本身要留给标题，但 title 与无障碍名一直有。 */
+.dsh-gti-send-label{display:none}
+.dsh-gti-row-wrap:hover .dsh-gti-send-label,.dsh-gti-send:focus-visible .dsh-gti-send-label{display:inline}
 .dsh-gti-dot{flex:none;width:8px;height:8px;border-radius:50%;border:.5px solid var(--dsw-alias-border-l2)}
 .dsh-gti-dot[data-state="open"]{background:var(--dsw-alias-state-success-primary);border-color:transparent}
 .dsh-gti-dot[data-state="closed"]{background:var(--dsw-alias-label-tertiary);border-color:transparent}
@@ -463,6 +506,8 @@ window.__ModuleLoader__.load({
       comment: ['M3 4.5h10v6H8l-3 2.5v-2.5H3z'],
       lock: ['M5 7.5V6a3 3 0 0 1 6 0v1.5', 'M4.5 7.5h7v6h-7z'],
       pin: ['M8 2.5 9 6l3.5.5-2.5 2.5.7 4.5-2.7-2-2.7 2 .7-4.5L3.5 6.5 7 6z'],
+      // 「发送到 DSH」：一条指向右侧的箭头（16px 网格里最不容易看错的「发出去」形状）。
+      send: ['M2.5 8h9', 'M8.3 4.8 11.5 8l-3.2 3.2'],
     }
 
     /**
@@ -618,6 +663,49 @@ window.__ModuleLoader__.load({
       if (result.code === 'transport') return t('error.transport')
       if (result.code === 'token-missing') return t('error.noToken')
       return result.message || t('error.unknown')
+    }
+
+    /**
+     * 把一条 issue 拼成要插进对话输入框的提示词：一行「请处理 …」，有网址再跟一行网址。
+     *
+     * **尾随换行是刻意的**：光标停在末尾的新行上，用户接着补自己的要求时不用先按回车；
+     * 多出来的那一行对模型侧无害（正文按行读）。
+     * @param t - 文案函数。
+     * @param issue - 线上 issue 对象（只用 `index` / `title` / `htmlUrl`）。
+     * @returns 提示词字符串。
+     */
+    function issuePrompt(t, issue) {
+      const head = t('send.prompt', { index: issue.index, title: issue.title })
+      const url = typeof issue.htmlUrl === 'string' && issue.htmlUrl !== '' ? issue.htmlUrl : null
+      return url === null ? `${head}\n` : `${head}\n${url}\n`
+    }
+
+    /**
+     * 「输入框哨兵」：渲染 `null`，唯一作用是把本会话的 `inputActions`（对话输入框的公开
+     * 写入面）登记进模块级 `inputTargets`，供看板的「发送到 DSH」兜底；卸载即删。
+     *
+     * 为什么不让看板只从自己的槽位 prop 拿：侧栏槽位的渲染点**不保证**传全那套标准 prop
+     * （`dsh-editor` 在 `sidebar.right.tab.document` 上白屏过）。`conversation.input.*` 是官方
+     * 自己（语音输入、目标栏）在用的位置，`inputActions` 一定在；两处都拿不到时发送只亮横幅，
+     * 不影响看板本身。
+     *
+     * 删除时先比对象：同一会话重挂（换布局 / 换会话）时新哨兵可能已经登记，晚到的旧 cleanup
+     * 不能把新的那份删掉。
+     * @param props - `conversation.input.dock` 交来的 props（`sessionId` 与 `inputActions`；
+     *   会话 id 缺失时退回 owner 的 `session.sessionId`）。
+     * @returns null。
+     */
+    function InputSink(props) {
+      const { sessionId, inputActions, session } = props
+      const id = typeof sessionId === 'string' && sessionId !== '' ? sessionId : session?.sessionId
+      React.useEffect(() => {
+        if (typeof id !== 'string' || id === '' || inputActions === undefined) return undefined
+        inputTargets.set(id, inputActions)
+        return () => {
+          if (inputTargets.get(id) === inputActions) inputTargets.delete(id)
+        }
+      }, [id, inputActions])
+      return null
     }
 
     // ── 小组件 ──────────────────────────────────────────────────────────────
@@ -832,9 +920,10 @@ window.__ModuleLoader__.load({
 
     /**
      * issue 详情：正文、元信息、依赖/阻塞、订阅/置顶/锁定/工时/附件、评论增删改。
-     * @param props - `api` / `t` / `target`（`{serverId, owner, repo, index}`）/ `onBack` / `onChanged` / `onEdit`。
+     * @param props - `api` / `t` / `target`（`{serverId, owner, repo, index}`）/ `onBack` / `onChanged` /
+     *   `onEdit`，外加可选的 `onSend`（给了才出「发送到 DSH」按钮）与 `sendNotice`（那次发送的结果横幅）。
      */
-    function IssueDetail({ api, t, target, onBack, onChanged, onEdit }) {
+    function IssueDetail({ api, t, target, onBack, onChanged, onEdit, onSend, sendNotice }) {
       const [detail, setDetail] = React.useState(null)
       const [meta, setMeta] = React.useState(null)
       const [error, setError] = React.useState(null)
@@ -932,6 +1021,7 @@ window.__ModuleLoader__.load({
             onClick: () => void reload(),
           }, h(Icon, { name: 'refresh' }))),
         notice === null ? null : h(Banner, { tone: notice.tone, text: notice.text }),
+        sendNotice === undefined || sendNotice === null ? null : h(Banner, { tone: sendNotice.tone, text: sendNotice.text }),
         h('div', { className: 'dsh-gti-detail' },
           h('div', { className: 'dsh-gti-detail-head' },
             h('h2', { className: 'dsh-gti-detail-title' }, issue.title),
@@ -960,7 +1050,15 @@ window.__ModuleLoader__.load({
             action(issue.state === 'open' ? t('issue.close') : t('issue.reopen'), 'issue.edit', { state: issue.state === 'open' ? 'closed' : 'open' }),
             action(issue.pinned ? t('issue.unpin') : t('issue.pin'), issue.pinned ? 'issue.unpin' : 'issue.pin'),
             action(issue.locked ? t('issue.unlock') : t('issue.lock'), issue.locked ? 'issue.unlock' : 'issue.lock'),
-            action(detail.subscribed ? t('issue.unsubscribe') : t('issue.subscribe'), detail.subscribed ? 'issue.unsubscribe' : 'issue.subscribe', {}, { reload: false, success: detail.subscribed ? undefined : t('issue.subscribed') })),
+            action(detail.subscribed ? t('issue.unsubscribe') : t('issue.subscribe'), detail.subscribed ? 'issue.unsubscribe' : 'issue.subscribe', {}, { reload: false, success: detail.subscribed ? undefined : t('issue.subscribed') }),
+            // 「发送到 DSH」：只有工作区看板给了 `onSend` 才出现（全局看板不碰别人的输入框）。
+            onSend === undefined ? null : h('button', {
+              type: 'button',
+              className: 'dsh-gti-button',
+              title: t('send.hint'),
+              'data-gti-send': 'true',
+              onClick: () => onSend(issue),
+            }, t('send.action'))),
 
           h('div', { className: 'dsh-gti-section', 'data-gti-section': 'deps' },
             h('div', { className: 'dsh-gti-section-head' }, t('deps.title')),
@@ -1831,9 +1929,10 @@ window.__ModuleLoader__.load({
 
     /**
      * 工作区看板：当前会话绑定仓库的 issues。
-     * @param props - `api` / `t` / `sessionId`。
+     * @param props - `api` / `t` / `sessionId`，外加可选的 `inputActions`（侧栏渲染点真给了就直接
+     *   用它，没给就退回 `conversation.input.dock` 哨兵登记的那份）。
      */
-    function WorkspaceBoard({ api, t, sessionId }) {
+    function WorkspaceBoard({ api, t, sessionId, inputActions }) {
       const { config, error: configError, reload: reloadConfig } = useConfig(api, t)
       const [binding, setBinding] = React.useState(null)
       const [bindingError, setBindingError] = React.useState(null)
@@ -1842,7 +1941,31 @@ window.__ModuleLoader__.load({
       const [keyword, setKeyword] = React.useState('')
       const [issues, setIssues] = React.useState(null)
       const [error, setError] = React.useState(null)
+      /** 「发送到 DSH」的结果横幅，列表页与详情页共用（详情页那次由 `sendNotice` 传下去）。 */
+      const [send, setSend] = React.useState(null)
       const debouncedKeyword = useDebounced(keyword)
+
+      /**
+       * 把一条 issue 发进当前会话的对话输入框。
+       *
+       * 写入面优先用槽位 prop（作用域最明确），没有就用 `conversation.input.dock` 哨兵登记的
+       * 那份 —— 侧栏渲染点不保证传全标准 prop。三种结局都落到横幅上，不静默失败。
+       * @param issue - 线上 issue 对象。
+       * @returns 无。
+       */
+      const sendIssue = (issue) => {
+        const actions = inputActions ?? inputTargets.get(sessionId)
+        if (actions === undefined || typeof actions.captureInsertion !== 'function' || typeof actions.insertText !== 'function') {
+          setSend({ tone: 'error', text: t('send.failed.input') })
+          return
+        }
+        // 先捕获再插：插入是「捕获时的选区 + 草稿版本」的 CAS，中间任何编辑都会让它返回 false。
+        if (!actions.insertText(issuePrompt(t, issue), actions.captureInsertion())) {
+          setSend({ tone: 'error', text: t('send.failed.busy') })
+          return
+        }
+        setSend({ tone: 'success', text: t('send.sent', { index: issue.index }) })
+      }
 
       /**
        * 绑定状态由**看板自己**读：列表页要拿它决定查哪个仓库，而绑定设置页只是其中一个视图
@@ -1924,14 +2047,28 @@ window.__ModuleLoader__.load({
         ? h(Loading, { t })
         : issues.length === 0
           ? h(Empty, { title: t('list.empty'), hint: t('list.emptyHint') })
-          : h('div', { className: 'dsh-gti-list' }, issues.map((issue) => h(IssueRow, {
+          : h('div', { className: 'dsh-gti-list' }, issues.map((issue) => h('div', {
             key: issueKey(issue),
-            issue,
-            t,
-            showRepo: false,
-            selected: view.kind === 'detail' && issueKey(view.issue) === issueKey(issue),
-            onOpen: (picked) => setView({ kind: 'detail', issue: picked }),
-          })))
+            className: 'dsh-gti-row-wrap',
+            'data-gti-send-row': issueKey(issue),
+          },
+            h(IssueRow, {
+              issue,
+              t,
+              showRepo: false,
+              selected: view.kind === 'detail' && issueKey(view.issue) === issueKey(issue),
+              onOpen: (picked) => setView({ kind: 'detail', issue: picked }),
+            }),
+            // 发送按钮是行的**兄弟**而不是子节点：`IssueRow` 本身就是 `<button>`，
+            // 交互元素不能嵌套（真实浏览器里点里层会连带触发外层）。
+            h('button', {
+              type: 'button',
+              className: 'dsh-gti-send',
+              title: t('send.hint'),
+              'data-gti-send': issueKey(issue),
+              onClick: () => sendIssue(issue),
+            }, h(Icon, { name: 'send', size: 14 }),
+              h('span', { className: 'dsh-gti-send-label' }, t('send.action'))))))
 
       if (view.kind === 'binding') {
         return h('div', { className: 'dsh-gti-root', 'data-gti-workspace': 'true' },
@@ -1994,6 +2131,8 @@ window.__ModuleLoader__.load({
             onBack: () => setView({ kind: 'list' }),
             onChanged: () => void load(),
             onEdit: () => setView({ kind: 'edit', issue: view.issue }),
+            onSend: sendIssue,
+            sendNotice: send,
           }))
       }
 
@@ -2003,6 +2142,7 @@ window.__ModuleLoader__.load({
         configError === null ? null : h(Banner, { tone: 'error', text: configError }),
         bindingError === null ? null : h(Banner, { tone: 'warn', text: bindingError }),
         error === null ? null : h(Banner, { tone: 'error', text: error }),
+        send === null ? null : h(Banner, { tone: send.tone, text: send.text }),
         binding !== null && effective === null
           ? h(Banner, { tone: 'warn', text: t('binding.none') },
             h('button', { type: 'button', className: 'dsh-gti-button', onClick: () => setView({ kind: 'binding' }) }, t('binding.settings')))
@@ -2049,10 +2189,11 @@ window.__ModuleLoader__.load({
         return h(GlobalBoard, { api, t })
       }
 
-      /** 右侧栏页签正文：只用 `sessionId`，别的 prop 一律不假设。 */
+      /** 右侧栏页签正文：只用 `sessionId` 与可选的 `inputActions`，别的 prop 一律不假设。 */
       function WorkspaceBoardSlot(props) {
         const sessionId = typeof props?.sessionId === 'string' ? props.sessionId : undefined
-        return h(WorkspaceBoard, { api, t, sessionId })
+        const inputActions = props?.inputActions
+        return h(WorkspaceBoard, { api, t, sessionId, inputActions })
       }
 
       ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'gitea-issues: dictionaries')
@@ -2092,6 +2233,16 @@ window.__ModuleLoader__.load({
         key: TAB_ID,
         locale: NS,
       }, WorkspaceBoardSlot)), 'gitea-issues: right sidebar tab body')
+
+      // 对话输入框的「哨兵」：不画任何东西，只把本会话的 `inputActions` 登记进 `inputTargets`，
+      // 给看板的「发送到 DSH」兜底（侧栏槽位不保证把这个标准 prop 传全，见文件头注释）。
+      // 与 dsh-editor 的哨兵 id 不同，两者互不顶替；order 靠后，不抢官方那条位置。
+      ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
+        name: 'conversation.input.dock',
+        id: 'gitea-issues-input',
+        order: 95,
+        locale: NS,
+      }, InputSink)), 'gitea-issues: composer input sink')
 
       // 快捷键可选：`shortcuts` 服务不在也不影响面板（guide 卡片照样能打开）。
       ctx.inject(['shortcuts'], (scoped) => {

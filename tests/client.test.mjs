@@ -6,7 +6,8 @@
  *    右侧栏页签类型与 guide 卡片、locale 字典），以及 zh/en 键集是否一致；
  * 2. **渲染面**：把每个注册出去的组件真渲染一遍，抓运行时错误（读 null 字段、把 undefined
  *    当数组用这类），并断言关键文案/数据出现在输出里；
- * 3. **交互面**：点列表行 → 进详情；点「新建」→ 进表单；改筛选 → 重新取数。
+ * 3. **交互面**：点列表行 → 进详情；点「新建」→ 进表单；改筛选 → 重新取数；
+ *    「发送到 DSH」→ 提示词落进假输入框（成功 / 拿不到输入框 / 输入框正忙三条路）。
  *
  * 抓不到的是样式与布局 —— 那部分只能在浏览器里手工验收（见 README「怎么验证」）。
  */
@@ -109,6 +110,12 @@ test('bundle 注册：locale 字典、main 面板、侧栏图标、右侧栏页�
 
   const body = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab')
   assert.equal(body.options.key, 'gitea-issues')
+
+  // 对话输入框的哨兵：list 槽位要 `id`，注册项不能夹带 `key`（catalog 用例也会核一遍）。
+  const dock = fake.slots.find((entry) => entry.options.name === 'conversation.input.dock')
+  assert.ok(dock, '没有注册对话输入框哨兵，「发送到 DSH」就没有兜底写入面')
+  assert.equal(dock.options.id, 'gitea-issues-input')
+  assert.equal(dock.options.key, undefined)
 
   assert.equal(fake.tabs.length, 1)
   assert.equal(fake.tabs[0].kind, 'gitea-issues')
@@ -274,3 +281,131 @@ function findNode(mini, predicate) {
   const found = mini.nodes?.find(predicate)
   return found
 }
+
+/** 全部满足条件的节点（同一个锚点出现多次时用，比如列表里每行一个发送按钮）。 */
+function findNodes(mini, predicate) {
+  return mini.nodes?.filter(predicate) ?? []
+}
+
+/**
+ * 一个假的对话输入框写入面：`captureInsertion` 发一张「捕获票」，`insertText` 收下文本。
+ * @param options - `accept`：`insertText` 的返回值；`false` 模拟「输入框正忙」。
+ * @returns `{ actions, log }`。
+ */
+function makeInputActions(options = {}) {
+  const log = { text: null, span: null, captures: 0, calls: 0 }
+  const actions = {
+    captureInsertion: () => { log.captures += 1; return { ticket: log.captures } },
+    insertText: (text, span) => {
+      log.calls += 1
+      if (options.accept === false) return false
+      log.text = text
+      log.span = span
+      return true
+    },
+  }
+  return { actions, log }
+}
+
+/** 工作区看板里「发送到 DSH」的锚点值：`data-gti-send` 在列表行上是 issueKey，在详情里是 `true`。 */
+const SEND_ROW = (index) => (node) => typeof node.props?.['data-gti-send'] === 'string' &&
+  node.props['data-gti-send'].endsWith(`\u0000${index}`)
+
+test('发送到 DSH：列表行把「处理指令 + 网址」插进当前会话的输入框', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const InputSink = fake.slots.find((entry) => entry.options.name === 'conversation.input.dock').component
+  const { actions, log } = makeInputActions()
+
+  // 哨兵登记：真实 GUI 里 `conversation.input.dock` 就是这么把写入面交出来的。
+  await mini.render(mini.React.createElement(InputSink, { sessionId: 'session-1', inputActions: actions }))
+  assert.deepEqual(mini.errors, [])
+
+  let text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+  assert.deepEqual(mini.errors, [], `渲染期报错：${mini.errors.map((error) => error.message).join('; ')}`)
+  const send = findNode(mini, SEND_ROW(12))
+  assert.ok(send, '列表行没有「发送到 DSH」按钮')
+  send.props.onClick()
+  assert.equal(log.text,
+    '请处理 Gitea issue #12：第一个 issue\nhttp://localhost:3000/dongasai/mylike/issues/12\n',
+    '插进输入框的文本不对')
+  assert.ok(log.captures >= 1, '插入前必须先捕获选区（插入是捕获 + 草稿版本的 CAS）')
+
+  text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+  assert.deepEqual(mini.errors, [])
+  assert.match(text, /已把 #12 发到对话输入框/)
+})
+
+test('发送到 DSH：详情页动作行发的是当前这条 issue', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const { actions, log } = makeInputActions()
+
+  // 这一条走**槽位 prop** 那条路（没有哨兵）—— 两条路都得能用。
+  await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-2', inputActions: actions }))
+  const row = findNode(mini, (node) => typeof node.props?.['data-gti-issue'] === 'string')
+  assert.ok(row, '没有找到列表行')
+  row.props.onClick(FIXTURES.issues[0])
+  let text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-2', inputActions: actions }))
+  assert.deepEqual(mini.errors, [])
+
+  const send = findNode(mini, (node) => node.props?.['data-gti-send'] === 'true')
+  assert.ok(send, '详情页动作行没有「发送到 DSH」')
+  send.props.onClick()
+  assert.match(log.text ?? '', /^请处理 Gitea issue #12：第一个 issue\nhttp:\/\/localhost:3000\/dongasai\/mylike\/issues\/12\n$/)
+  text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-2', inputActions: actions }))
+  assert.deepEqual(mini.errors, [])
+  assert.match(text, /已把 #12 发到对话输入框/)
+})
+
+test('发送到 DSH：issue 没有网址时就不带那一行', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const { actions, log } = makeInputActions()
+
+  // 第二条 issue 的 `htmlUrl` 临时抹掉：缺字段一律按「没有」渲染（约束 3）。
+  const original = FIXTURES.issues[1].htmlUrl
+  FIXTURES.issues[1].htmlUrl = null
+  try {
+    await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-3', inputActions: actions }))
+    const send = findNode(mini, SEND_ROW(13))
+    assert.ok(send, '第二条 issue 没有发送按钮')
+    send.props.onClick()
+    assert.equal(log.text, '请处理 Gitea issue #13：第二个 issue\n')
+  } finally {
+    FIXTURES.issues[1].htmlUrl = original
+  }
+})
+
+test('发送到 DSH：拿不到输入框 / 输入框正忙都亮横幅，不炸', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+
+  // 没有任何哨兵、槽位也没传 `inputActions`（用别人没登记过的会话 id，避免串场）。
+  await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-no-dock' }))
+  let send = findNode(mini, SEND_ROW(12))
+  assert.ok(send, '列表行没有「发送到 DSH」按钮')
+  send.props.onClick()
+  let text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-no-dock' }))
+  assert.deepEqual(mini.errors, [])
+  assert.match(text, /拿不到对话输入框/)
+
+  // 输入框正忙：`insertText` 返回 false（正在提交，或草稿刚被别处改过）。
+  const { actions, log } = makeInputActions({ accept: false })
+  await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-4', inputActions: actions }))
+  send = findNode(mini, SEND_ROW(12))
+  send.props.onClick()
+  text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-4', inputActions: actions }))
+  assert.deepEqual(mini.errors, [])
+  assert.equal(log.text, null, '被拒时不该记下文本')
+  assert.match(text, /输入框正忙/)
+})
+
+test('发送到 DSH：只有工作区看板有这个入口，全局看板不碰输入框', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.deepEqual(mini.errors, [])
+  assert.deepEqual(findNodes(mini, (node) => node.props?.['data-gti-send'] !== undefined), [],
+    '全局看板是跨工作区的视图，不该出现「发送到 DSH」')
+})
