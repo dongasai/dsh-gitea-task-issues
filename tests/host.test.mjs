@@ -536,6 +536,36 @@ test('gitea.call 也接受平铺的内层参数（不强制多套一层 params�
   assert.deepEqual(nested, flat)
 })
 
+test('界面形状回归：sessionId 在 params 里 + 不传 owner/repo，必须按绑定解析', async () => {
+  // 这就是工作区看板的真实调用：sessionId 塞在 `params` 内层，仓库靠绑定补。
+  // 早先桥只认顶层的 sessionId，于是内层那个被覆盖成 undefined，解析悄悄回退到 Host 的
+  // 工作区根，最后报出与真实原因无关的「owner must be a non-empty string」。
+  const nested = await call('gitea.call', {
+    op: 'issue.list',
+    params: { sessionId: SESSION_ID, state: 'all', limit: 20 },
+  })
+  assert.equal(nested.status, 200, `嵌套 sessionId 必须能按绑定解析：${JSON.stringify(nested.body)}`)
+  assert.ok(Array.isArray(nested.body.data), '应当返回 issue 数组')
+  assert.ok(nested.body.data.length >= 1)
+
+  // `owner: null` 也要当成「没给」，回退到绑定，而不是带着 null 去撞必填校验。
+  const nullOwner = await call('gitea.call', {
+    op: 'issue.list',
+    params: { sessionId: SESSION_ID, state: 'all', owner: null, repo: null, limit: 5 },
+  })
+  assert.equal(nullOwner.status, 200, `owner/repo 为 null 时应当回退到绑定：${JSON.stringify(nullOwner.body)}`)
+
+  // 解析不出仓库时，报的必须是**真实原因**，不能是参数校验的误报。
+  const unbound = await makeTemporary('gti-unbound-')
+  const noBinding = await call('gitea.call', {
+    op: 'issue.list',
+    params: { root: unbound, state: 'open' },
+  })
+  assert.equal(noBinding.status, 400)
+  assert.equal(noBinding.body.code, 'no-binding', `应当报 no-binding，实际 ${JSON.stringify(noBinding.body)}`)
+  await rm(unbound, { recursive: true, force: true })
+})
+
 test('仓库元信息与跨仓库搜索', async () => {
   const meta = await ok('repo.meta', { sessionId: SESSION_ID })
   assert.equal(meta.repository.fullName, 'dongasai/mylike')
