@@ -296,6 +296,8 @@ test('泳道模式：默认泳道 + 按状态分组，状态筛选被接管；�
   assert.deepEqual(mini.errors, [])
   assert.equal(findNode(mini, (node) => node.props?.['data-gti-list'] !== undefined).props['data-gti-list'], 'lanes',
     '默认必须是泳道模式')
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-board'] !== undefined).props['data-gti-board'], 'state',
+    '看板要带上当前分组维度（锚点，同时说明列是横着铺的）')
   // 按状态分泳道时取数固定「全部」，否则「已关闭」那条泳道永远不会出现（fixtures 一 open 一 closed）。
   assert.ok(calls.some((call) => call.op === 'gitea.call' && call.params.op === 'issue.search' && call.params.params.state === 'all'),
     `按状态分泳道应先取全部状态：${JSON.stringify(calls)}`)
@@ -350,6 +352,23 @@ test('泳道模式：分组维度可切换（指派 / 标签 / 里程碑），�
 
   // 分组不再是状态 → 状态筛选交还用户（默认进行中）。
   assert.equal(findNode(mini, (node) => node.props?.['data-gti-filter-state'] === 'true').props.disabled, false)
+})
+
+test('泳道模式：按状态分组时空列也留着（看板要看得见哪一列是空的）', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+  const saved = FIXTURES.issues
+  try {
+    // 只留 open 那条：已关闭列仍要在，只是里面是空的。
+    FIXTURES.issues = saved.filter((issue) => issue.state === 'open')
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+    assert.deepEqual(mini.errors, [])
+    assert.deepEqual(laneKeys(mini), ['state:open', 'state:closed'])
+    assert.ok(findNode(mini, (node) => node.props?.['data-gti-lane-empty'] === 'state:closed'),
+      '空的「已关闭」列必须照样渲染出来')
+  } finally {
+    FIXTURES.issues = saved
+  }
 })
 
 test('工作区看板：默认泳道模式，泳道里的行照样能发送到 DSH', async () => {

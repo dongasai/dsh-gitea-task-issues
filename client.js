@@ -136,6 +136,7 @@ window.__ModuleLoader__.load({
       'group.none.assignee': '未指派',
       'group.none.label': '无标签',
       'group.none.milestone': '无里程碑',
+      'lane.empty': '暂无',
 
       'issue.new': '新建 issue',
       'issue.labels': '标签',
@@ -319,6 +320,7 @@ window.__ModuleLoader__.load({
       'group.none.assignee': 'Unassigned',
       'group.none.label': 'No label',
       'group.none.milestone': 'No milestone',
+      'lane.empty': 'Empty',
 
       'issue.new': 'New issue',
       'issue.labels': 'Labels',
@@ -535,12 +537,22 @@ window.__ModuleLoader__.load({
 .dsh-gti-seg-button+.dsh-gti-seg-button{border-left:.5px solid var(--dsw-alias-border-l2)}
 .dsh-gti-seg-button:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2))}
 .dsh-gti-seg-button[data-active="true"]{background:var(--dsw-alias-interactive-bg-selected,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary);font-weight:600}
-/* 泳道：一条泳道一个分组盒，标题条吸顶，滚动时还知道自己在哪条泳道里。 */
-.dsh-gti-lane{margin:0 0 10px;border:.5px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-sm,6px)}
+/* 泳道：**竖列**（与主流看板一致 —— 分组横向铺成一列一列，卡片在列内从上往下堆）。
+   列多了横向滚动；单列封顶 340px，免得只剩一列时被拉成一整屏宽的怪东西。
+   列头吸顶，纵向滚动时还知道自己在哪一列里。 */
+.dsh-gti-board{display:flex;align-items:flex-start;gap:8px;min-height:100%}
+.dsh-gti-lane{flex:1 1 200px;min-width:172px;max-width:340px;display:flex;flex-direction:column;border:.5px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-sm,6px)}
 .dsh-gti-lane-head{display:flex;align-items:center;gap:8px;padding:6px 10px;position:sticky;top:0;z-index:1;background:var(--dsw-alias-bg-layer-2);border-bottom:.5px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-sm,6px) var(--dsw-radius-sm,6px) 0 0}
 .dsh-gti-lane-title{min-width:0;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dsh-gti-lane-count{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary)}
-.dsh-gti-lane-body{padding:2px 4px 6px}
+.dsh-gti-lane-body{display:flex;flex-direction:column;gap:2px;padding:2px 4px 6px}
+/* 列里比列表窄：标题改成最多三行（超了省略号；完整标题在行的 title 里，悬停能看到），
+   发送按钮贴到卡片右上角 —— 卡片高的时候居中的箭头会飘在半空。 */
+.dsh-gti-lane-body .dsh-gti-row{margin:0}
+.dsh-gti-lane-body .dsh-gti-row-wrap{margin:0}
+.dsh-gti-lane-body .dsh-gti-row-title{white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.dsh-gti-lane-body .dsh-gti-send{align-self:flex-start}
+.dsh-gti-lane-empty{padding:10px 6px;font-size:11px;text-align:center;color:var(--dsw-alias-label-tertiary)}
 `
 
     /** 界面里用的极简图标（本 bundle 没有构建步骤，所以手画 SVG，不引图标库）。 */
@@ -833,8 +845,10 @@ window.__ModuleLoader__.load({
      *
      * 一条 issue 可以同时落在多条泳道（多个指派 / 多个标签）—— 这是有意的：泳道是**视角**，
      * 不是归属；否则「按指派分」会悄悄丢掉第二个负责人。没有任何值的 issue 落进「未指派 /
-     * 无标签 / 无里程碑」泳道，不会被漏掉。**空泳道不渲染**：默认视图受状态筛选约束（按状态
-     * 分泳道时反而是取全部，见两个看板里的 `stateLocked`），渲染一堆空盒子只是噪音。
+     * 无标签 / 无里程碑」泳道，不会被漏掉。
+     *
+     * **按状态分组时两条泳道始终都在**（空了也留一列）：看板的意义就是「看得见哪一列是空的」，
+     * 默认视图又固定取全部状态，所以列不会白占地方；其余维度只能从数据里长出泳道，没有就不画。
      * @param issues - 线上 issue 数组。
      * @param group - 分组维度：`state` / `assignee` / `label` / `milestone`。
      * @param t - 文案函数。
@@ -843,18 +857,18 @@ window.__ModuleLoader__.load({
      */
     function laneGroups(issues, group, t) {
       const list = issues ?? []
+      // 状态按固定顺序建桶：按标题排序会把 closed 排到 open 前面（字母序），也不该丢空列。
+      if (group === 'state') {
+        const lanes = ['open', 'closed'].map((state) => ({ key: `state:${state}`, title: t(`state.${state}`), issues: [] }))
+        const byKey = new Map(lanes.map((lane) => [lane.key, lane]))
+        for (const issue of list) byKey.get(`state:${issue.state}`)?.issues.push(issue)
+        return lanes
+      }
       const buckets = new Map()
       const push = (key, title, issue) => {
         const lane = buckets.get(key)
         if (lane === undefined) buckets.set(key, { key, title, issues: [issue] })
         else lane.issues.push(issue)
-      }
-      // 状态按固定顺序建桶：按标题排序会把 closed 排到 open 前面（字母序），不直观。
-      if (group === 'state') {
-        for (const state of ['open', 'closed']) {
-          for (const issue of list) if (issue.state === state) push(`state:${state}`, t(`state.${state}`), issue)
-        }
-        return [...buckets.values()]
       }
       const noneKey = `${group}:-`
       for (const issue of list) {
@@ -903,7 +917,7 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * issue 列表的两种呈现：**泳道（默认）** 与扁平列表。
+     * issue 列表的两种呈现：**泳道（竖列看板，默认）** 与扁平列表。
      * @param props - `issues` / `mode` / `group` / `showRepo` / `selectedKey` / `onOpen` /
      *   `onSend`（可选）/ `t`。
      */
@@ -921,16 +935,21 @@ window.__ModuleLoader__.load({
         return h('div', { className: 'dsh-gti-list', 'data-gti-list': 'list' }, issues.map(row))
       }
       return h('div', { className: 'dsh-gti-list', 'data-gti-list': 'lanes' },
-        laneGroups(issues, group, t).map((lane) => h('section', {
-          key: lane.key,
-          className: 'dsh-gti-lane',
-          'data-gti-lane': lane.key,
-        },
-          h('div', { className: 'dsh-gti-lane-head' },
-            h('span', { className: 'dsh-gti-lane-title' }, lane.title),
-            h('span', { className: 'dsh-gti-lane-count', 'data-gti-lane-count': lane.issues.length },
-              t('list.count', { n: lane.issues.length }))),
-          h('div', { className: 'dsh-gti-lane-body' }, lane.issues.map(row)))))
+        h('div', { className: 'dsh-gti-board', 'data-gti-board': group },
+          laneGroups(issues, group, t).map((lane) => h('section', {
+            key: lane.key,
+            className: 'dsh-gti-lane',
+            'data-gti-lane': lane.key,
+          },
+            h('div', { className: 'dsh-gti-lane-head' },
+              h('span', { className: 'dsh-gti-lane-title' }, lane.title),
+              h('span', { className: 'dsh-gti-lane-count', 'data-gti-lane-count': lane.issues.length },
+                t('list.count', { n: lane.issues.length }))),
+            h('div', { className: 'dsh-gti-lane-body' },
+              // 空列也给个占位：看板要能看出「这一列是空的」，而不是以为列没渲染出来。
+              lane.issues.length === 0
+                ? h('div', { className: 'dsh-gti-lane-empty', 'data-gti-lane-empty': lane.key }, t('lane.empty'))
+                : lane.issues.map(row))))))
     }
 
     /**
