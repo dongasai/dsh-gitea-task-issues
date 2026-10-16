@@ -16,7 +16,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（35 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（36 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -39,7 +39,7 @@
 | [lib/aggregate.js](lib/aggregate.js) | 详情 / 仓库元信息的一揽子读取（桥与工具共用） |
 | [lib/errors.js](lib/errors.js) | `BridgeError` / `GiteaError` 与状态码映射 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 35 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 36 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 
@@ -68,23 +68,27 @@
 8. **不静默重试、不做后台轮询**：读写都可能改变远端状态，一次用户动作一次调用。
 9. **破坏性动作要能说清后果**：删除服务器会连带删掉它的令牌记录与指向它的绑定；
    issue / 评论 / 附件删除不可撤销（界面二次确认）。
+10. **模型工具必须工作区隔离**：7 个 `gitea_issue_*` 工具的**参数里不能有** `server` / `repo`
+    （也不能有跨仓库搜索档）—— 目标只能由当前会话的工作区解析出来（`workspaceTarget`），
+    解析不出就报 `no-binding` / `no-server-for-host` / `root-required`。
+    探针会断言参数集与「换工作区就换仓库」，别为了「顺手指定一个仓库」把它加回来。
 
 ### 浏览器半边
 
-10. **所有远端读写只走那条桥**。浏览器半边永远拿不到令牌，也不直连 Gitea（CORS + 泄漏两件事）。
-11. **不假设槽位传了哪些 prop**。slot catalog 列的是类型并集：`sidebar.right.pane.tab` 有
+11. **所有远端读写只走那条桥**。浏览器半边永远拿不到令牌，也不直连 Gitea（CORS + 泄漏两件事）。
+12. **不假设槽位传了哪些 prop**。slot catalog 列的是类型并集：`sidebar.right.pane.tab` 有
     `sessionId`，但别去调它没保证的 `useSessions`；要什么自己从 `ctx` 服务现读，读不到就降级
     提示（`dsh-editor` 的约束 18 踩过整块白屏）。
-12. **只消费 `lib/shape.js` 的字段集**；缺字段按「没有」渲染，不抛错。
-13. **看板自己读绑定**：列表页要拿绑定决定查哪个仓库，而绑定设置只是其中一个视图 ——
+13. **只消费 `lib/shape.js` 的字段集**；缺字段按「没有」渲染，不抛错。
+14. **看板自己读绑定**：列表页要拿绑定决定查哪个仓库，而绑定设置只是其中一个视图 ——
     把「读绑定」交给只在设置页挂载的面板，列表页就永远不知道绑了谁（探针抓到过）。
-14. **右侧栏页签是页类型**：`sidebarRightTabs.register` 不给 `patterns`，否则会抢文件的自动
+15. **右侧栏页签是页类型**：`sidebarRightTabs.register` 不给 `patterns`，否则会抢文件的自动
     打开；入口走 guide 卡片 + 快捷键。
-15. **样式只挂组件本地 `<style>` 且只用主题令牌**（`--dsw-alias-*`），不引外部样式表、
+16. **样式只挂组件本地 `<style>` 且只用主题令牌**（`--dsw-alias-*`），不引外部样式表、
     不写死颜色。
-16. **调试锚点走 `data-gti-*` 属性**，不要用 `class` 选择器或可见文案当锚点 —— 探针就是靠
+17. **调试锚点走 `data-gti-*` 属性**，不要用 `class` 选择器或可见文案当锚点 —— 探针就是靠
     这些属性点交互的。
-17. **`h(...)` 的子元素别多打一个 `)`**：`node --check` 只验语法，但括号/逗号错位会让整段变成
+18. **`h(...)` 的子元素别多打一个 `)`**：`node --check` 只验语法，但括号/逗号错位会让整段变成
     逗号表达式或提前收口。改完大块 `h(...)` 之后跑一次 `node --test tests/client.test.mjs`，
     迷你 React 会把树渲染一遍，这类错误当场就炸。
 
@@ -126,8 +130,8 @@ node --check index.js && node --check client.js
   [lib/shape.js](lib/shape.js) 的注释；两边字段必须逐字一致。
 - **动操作表**（路径、参数名、请求体）→ 先查 [docs/gitea-api-reference.md](docs/gitea-api-reference.md)
   确认上游语义，再同步该文档里受影响的小节。
-- **加/改模型工具** → 同步 README 的「功能列表」与「模型工具怎么选仓库」；工具描述里要写清
-  默认仓库怎么解析。
+- **加/改模型工具** → 同步 README 的「功能列表」与「模型工具：工作区隔离」；工具描述里要写清
+  目标仓库只能来自当前工作区（**不要**加回 `server` / `repo` 参数）。
 - **改服务器/令牌/绑定的行为** → 同步 README 的「快速开始」第 2、3 步与排错表；
   动了 `servers.json` 的结构要同时动 `lib/store.js` 的 `coerceState`。
 - **改文案键** → `zh` 与 `en` 一起改（探针会拦）。

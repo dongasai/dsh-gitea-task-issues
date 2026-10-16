@@ -576,6 +576,48 @@ test('删除服务器会连带清掉令牌记录与指向它的绑定', async ()
   assert.equal(state.bindings['/tmp/other-work'], undefined)
 })
 
+test('工作区隔离：工具参数里没有 server / repo / scope，且换工作区就换仓库', async () => {
+  for (const tool of world.tools) {
+    const properties = Object.keys(tool.parameters.properties ?? {})
+    for (const forbidden of ['server', 'repo', 'scope']) {
+      assert.equal(properties.includes(forbidden), false,
+        `${tool.name} 不该收 "${forbidden}" 参数：工具只能操作当前工作区的仓库`)
+    }
+    assert.match(tool.description, /当前工作区/, `${tool.name} 的描述要写明工作区隔离`)
+  }
+
+  // 同一个工具，换一个没有绑定也侦测不到仓库的工作区 → 明确报错，而不是猜一个仓库。
+  const other = await makeTemporary('gti-other-')
+  const unbound = world.tools.find((tool) => tool.name === 'gitea_issue_list')
+  const result = await unbound.execute({ state: 'open' }, {
+    signal: AbortSignal.timeout(5000),
+    agent: { session: { header: { cwd: other } } },
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'no-binding')
+
+  // 连会话都没有（没有工作区）→ 也说清楚，而不是拿默认仓库去改。
+  const noSession = await unbound.execute({ state: 'open' }, { signal: AbortSignal.timeout(5000) })
+  assert.equal(noSession.ok, false)
+  assert.equal(noSession.code, 'root-required')
+
+  // 正面：另一个**有自己 remote** 的工作区，同一个工具会跟着它换仓库。
+  const second = await makeTemporary('gti-second-')
+  await mkdir(join(second, '.git'), { recursive: true })
+  await writeFile(join(second, '.git/config'), [
+    '[remote "origin"]',
+    `\turl = ${world.gitea.url}/dongasai/other.git`,
+  ].join('\n'), 'utf8')
+  const secondResult = await unbound.execute({ state: 'all' }, {
+    signal: AbortSignal.timeout(5000),
+    agent: { session: { header: { cwd: second } } },
+  })
+  assert.equal(secondResult.ok, true)
+  assert.equal(secondResult.owner, 'dongasai')
+  assert.equal(secondResult.repo, 'other', '工具必须跟着工作区走，而不是记住上一次的仓库')
+  await rm(second, { recursive: true, force: true })
+})
+
 test('模型工具：列表 / 详情 / 创建 / 编辑 / 评论三件套', async () => {
   const list = await runTool('gitea_issue_list', { state: 'open', limit: 10 })
   assert.equal(list.value.ok, true)

@@ -26,7 +26,7 @@ DSH 插件：把**工作区绑到 Gitea 仓库**，然后在两处看板里处�
     - 分配/blocks
     - 评论的查看/添加/删除/编辑
     - 订阅/Pin/Label/Lock/times
-* dsh工具issues管理(只实现主要功能,没有删除),给agent的用的
+* dsh工具issues管理(只实现主要功能,没有删除),给agent的用的,进行工作区隔离,只能操作本工作区的,不能选仓库
     - 列出/搜索
     - 查看详情
     - 创建/编辑
@@ -91,19 +91,19 @@ dsh plugin --profile web add <本仓库绝对路径>
 - **全局看板**（左侧栏图标，位置在官方「自动化任务」下面）：跨服务器（或指定一台）、
   跨仓库的 issue 列表，点开是「列表 + 详情」并排；右上角可进服务器管理。
 
-## 模型工具怎么选仓库
+## 模型工具：工作区隔离
 
-7 个工具都收同两个可选参数：
+7 个工具**只能操作当前会话工作区对应的那个仓库**，参数里**没有** `server` / `repo`
+（也没有跨仓库搜索档）—— 模型无法把操作指向别的仓库。
 
-- `server`：服务器 id（看板里那台的 id）；
-- `repo`：`owner/name`。
+目标这样解析：手动绑定优先，其次读该工作区 `.git/config` 的 remote 自动侦测，再和已配置
+服务器按主机名配对。解析不出（工作区不是 git 仓库、或 remote 主机名没有对应服务器）时，工具
+明确报 `no-binding` / `no-server-for-host` / `root-required`，**不会猜一个仓库去改**。
 
-都不给就按**当前会话的工作区**解析：手动绑定优先，其次读 `.git/config` 的 remote 自动侦测。
-解析不出（工作区不是 git 仓库、或 remote 主机名没有对应服务器）时，工具明确报
-`no-binding` / `no-server-for-host`，不会猜一个仓库去改。
+换个工作区就换个仓库：同一个工具在 A 工作区操作 A 的仓库，在 B 工作区操作 B 的。
 
-`gitea_issue_list` 的 `scope` 默认 `repo`（只看一个仓库）；`all` 走 Gitea 的跨仓库搜索，
-**只能按 owner 收窄** —— 上游那个端点没有按单个仓库过滤的参数。
+> 界面（两处看板）不受这条限制：全局看板本来就要跨服务器 / 跨仓库看；工作区看板只看当前
+> 工作区绑定的仓库。
 
 ## 线上协议
 
@@ -147,7 +147,8 @@ dsh plugin --profile web add <本仓库绝对路径>
 | `forbidden` | 令牌 scope 不够（缺 `write:issue`），或该仓库不允许你操作 |
 | `not-found` | `owner/repo` 或 issue 编号不存在。**issue 编号是 Gitea 的 `number`，不是数据库 `id`** |
 | `validation-failed` | 上游 422：多半是标签名在仓库里不存在，或里程碑 id 不对 |
-| `no-binding` | 这个工作区没绑定、也没有可用的 git remote：去绑定设置手填 |
+| `no-binding` | 这个工作区没绑定、也没有可用的 git remote：去绑定设置手填（工具与界面都会报它） |
+| `root-required` | 工具调用没有会话工作区（例如不在工作区里跑）：工具只在工作区里工作 |
 | `no-server-for-host` | 侦测到了 remote，但主机名没有对应的已配置服务器：先添加服务器 |
 | `stale-config` | 配置在你操作期间被别处改过：刷新后重试 |
 | 找不到右侧栏页签入口 | 从右侧栏引导卡片或 `Ctrl/Cmd+Alt+G` 打开；它是**页类型**，不参与文件自动打开 |
@@ -158,7 +159,7 @@ dsh plugin --profile web add <本仓库绝对路径>
 ### 命令行能覆盖的部分
 
 ```bash
-node --test tests/*.test.mjs   # 35 个用例
+node --test tests/*.test.mjs   # 36 个用例
 node --check index.js && node --check client.js
 ```
 
@@ -184,7 +185,8 @@ git remote 解析、配置存储（原子写 / 乐观并发 / 坏文件留档）
 - **issue 编辑不带乐观锁**：Gitea 的 `PATCH /issues/{index}` 支持 `content_version` 做冲突检测，
   这里没用 —— 两人同时改同一条时后写覆盖先写。
 - **跨仓库搜索不能按单个仓库过滤**：上游只支持 `owner`，所以全局看板选「全部服务器」时
-  仓库筛选不可用（工作区看板不受影响）。
+  仓库筛选不可用（工作区看板不受影响）。**模型工具没有跨仓库档** —— 那是「换个仓库看」的
+  能力，与工作区隔离相冲。
 - **分页上限由实例决定**：实际上限来自 `GET /settings/api` 的 `max_response_items`；插件按 50
   请求、最多 100，列表不自动翻页。
 - **附件走 base64 过桥**：单文件上限 16 MiB（桥请求体 32 MiB），更大的文件请在 Gitea 网页传。
