@@ -75,6 +75,8 @@ DSH Web → 左侧栏**插件** → **添加插件** → 填入本仓库绝对�
 dsh plugin --profile web add github:dongasai/dsh-gitea-task-issues
 # 或
 dsh plugin --profile web add git+https://github.com/dongasai/dsh-gitea-task-issues.git
+# 钉版本（URL 后加 #<tag>，锁到某个发布版本来复现问题 / 稳定使用）
+dsh plugin --profile web add github:dongasai/dsh-gitea-task-issues#0.2
 ```
 
 `dsh plugin --profile <name> <pnpm args>` 把参数转发给该 profile 目录里的 pnpm。装进来的是
@@ -83,7 +85,8 @@ dsh plugin --profile web add git+https://github.com/dongasai/dsh-gitea-task-issu
 - `--profile` **必填**（不写直接报 `required option '--profile <name> not specified'`）。
 - **必须带 `git+` 或 `github:` 前缀**。`git@github.com:owner/repo.git` 这种 scp 写法不会被认成
   git spec，pnpm 会把它当路径，装出一条指向不存在目录的 `link:` 死链。
-- **钉版本**：URL 后加 `#`，例如 `...#0.2`（tag / 分支 / commit 都行；本仓库当前 tag 是 `0.2`）。
+- **钉版本**：URL 后加 `#`（上面第三条命令就是钉 `0.2`），tag / 分支 / commit 都行；
+  本仓库当前 tag 是 `0.2`，对应 `package.json` 的 `0.2.0` —— 不带 `#` 则跟 `main` 走，每次装到的都可能是新代码。
 - pnpm 默认会拦 `prepare` 等依赖构建脚本；本包**没有任何构建步骤**（`client.js` 是手写的浏览器
   bundle，由 Host 直接读盘发出），不会遇到。
 
