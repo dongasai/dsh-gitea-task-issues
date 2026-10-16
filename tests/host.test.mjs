@@ -108,17 +108,17 @@ function makeCtx({ cwd, credentials, rejection }) {
 // ── 纯函数 ──────────────────────────────────────────────────────────────────
 
 test('parseGitRemoteUrl 认 https / scp / ssh / 子路径', () => {
-  assert.deepEqual(parseGitRemoteUrl('https://tea.2sxo.com/dongasai/mylike.git'), {
-    host: 'tea.2sxo.com', hostname: 'tea.2sxo.com', path: 'dongasai/mylike', owner: 'dongasai', repo: 'mylike',
+  assert.deepEqual(parseGitRemoteUrl('https://gitea.example.com/dongasai/mylike.git'), {
+    host: 'gitea.example.com', hostname: 'gitea.example.com', path: 'dongasai/mylike', owner: 'dongasai', repo: 'mylike',
   })
-  assert.deepEqual(parseGitRemoteUrl('git@tea.2sxo.com:dongasai/mylike.git'), {
-    host: 'tea.2sxo.com', hostname: 'tea.2sxo.com', path: 'dongasai/mylike', owner: 'dongasai', repo: 'mylike',
+  assert.deepEqual(parseGitRemoteUrl('git@gitea.example.com:dongasai/mylike.git'), {
+    host: 'gitea.example.com', hostname: 'gitea.example.com', path: 'dongasai/mylike', owner: 'dongasai', repo: 'mylike',
   })
-  assert.equal(parseGitRemoteUrl('ssh://git@tea.2sxo.com:2222/g/p/r.git')?.repo, 'r')
-  assert.equal(parseGitRemoteUrl('https://tea.2sxo.com/a/b/c.git')?.owner, 'a/b')
+  assert.equal(parseGitRemoteUrl('ssh://git@gitea.example.com:2222/g/p/r.git')?.repo, 'r')
+  assert.equal(parseGitRemoteUrl('https://gitea.example.com/a/b/c.git')?.owner, 'a/b')
   assert.equal(parseGitRemoteUrl('http://127.0.0.1:3000/o/r')?.host, '127.0.0.1:3000')
   assert.equal(parseGitRemoteUrl('not a url'), undefined)
-  assert.equal(parseGitRemoteUrl('https://tea.2sxo.com/onlyowner'), undefined)
+  assert.equal(parseGitRemoteUrl('https://gitea.example.com/onlyowner'), undefined)
 })
 
 test('parseGitRemotes 只取 [remote] 段里的 url，origin 优先', () => {
@@ -128,18 +128,18 @@ test('parseGitRemotes 只取 [remote] 段里的 url，origin 优先', () => {
     '[remote "upstream"]',
     '  url = https://example.com/up/repo.git',
     '[remote "origin"]',
-    '  url = git@tea.2sxo.com:dongasai/mylike.git',
+    '  url = git@gitea.example.com:dongasai/mylike.git',
     '  fetch = +refs/heads/*:refs/remotes/origin/*',
   ].join('\n')
   const remotes = parseGitRemotes(text)
-  assert.equal(remotes.get('origin'), 'git@tea.2sxo.com:dongasai/mylike.git')
+  assert.equal(remotes.get('origin'), 'git@gitea.example.com:dongasai/mylike.git')
   assert.equal(remotes.get('upstream'), 'https://example.com/up/repo.git')
   assert.equal(parseGitRemotes('[core]\n  bare = true\n').size, 0)
 })
 
 test('normalizeBaseUrl 补协议、去尾斜杠、保留子路径、拒非 http', () => {
-  assert.equal(normalizeBaseUrl('tea.2sxo.com'), 'https://tea.2sxo.com')
-  assert.equal(normalizeBaseUrl('https://tea.2sxo.com/'), 'https://tea.2sxo.com')
+  assert.equal(normalizeBaseUrl('gitea.example.com'), 'https://gitea.example.com')
+  assert.equal(normalizeBaseUrl('https://gitea.example.com/'), 'https://gitea.example.com')
   assert.equal(normalizeBaseUrl('http://host:3000/gitea///'), 'http://host:3000/gitea')
   assert.equal(normalizeBaseUrl('https://host/x?a=1#b'), 'https://host/x')
   assert.throws(() => normalizeBaseUrl('ftp://host'), BridgeError)
@@ -198,10 +198,10 @@ test('resolveLabelIds：名字→id、数字串当 id、未知名字报错', asy
 
 test('matchServerByHost 先按 host:port 全等，再退回主机名', () => {
   const servers = [
-    { id: 'srv-a', baseUrl: 'https://tea.2sxo.com' },
+    { id: 'srv-a', baseUrl: 'https://gitea.example.com' },
     { id: 'srv-b', baseUrl: 'http://127.0.0.1:3000/gitea' },
   ]
-  assert.equal(matchServerByHost(servers, 'tea.2sxo.com')?.id, 'srv-a')
+  assert.equal(matchServerByHost(servers, 'gitea.example.com')?.id, 'srv-a')
   assert.equal(matchServerByHost(servers, '127.0.0.1:3000')?.id, 'srv-b')
   assert.equal(matchServerByHost(servers, '127.0.0.1:9999')?.id, 'srv-b')
   assert.equal(matchServerByHost(servers, 'nope.example'), undefined)

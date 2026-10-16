@@ -16,7 +16,7 @@
 | 全局 `produces` | `application/json` |
 | 规模 | 308 条 path，222 个 definition |
 
-> **读取说明**：编写本文时 `/tmp/giti/swagger.v1.json` 在本执行环境内不可读（该路径位于另一挂载命名空间），实际依据仓库 README 记载的源 `https://tea.2sxo.com/swagger.v1.json` 重新取得，大小同为 870,698 字节，并与工作区 `.cache/swagger.v1.json` 逐字节一致（MD5 `4b8a5ae1eb683eca9f1efde285771e88`），可视为同一份输入。
+> **来源**：本文由该实例的 `swagger.v1.json`（Swagger 2.0，870,698 字节）逐条抄写而成；下文所有路径、参数名与请求体字段均以该文件为准。
 
 ### 认证方式（swagger `securityDefinitions`）
 
