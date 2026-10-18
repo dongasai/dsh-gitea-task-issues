@@ -179,6 +179,15 @@ window.__ModuleLoader__.load({
 
       'form.createTitle': '新建 issue',
       'form.editTitle': '编辑 issue',
+      // 新建目标：默认从**已绑定的工作区**里挑（绑定直接给出仓库），手动填 owner/name 只是兜底。
+      'form.targetMode': '新建目标',
+      'form.targetWorkspace': '已绑定的工作区',
+      'form.targetManual': '手动指定仓库',
+      'form.targetWorkspaceLabel': '目标工作区',
+      'form.targetPick': '选择工作区…',
+      'form.targetNone': '还没有任何工作区绑定仓库。先在工作区看板的「绑定设置」里绑一个，或切到「手动指定仓库」。',
+      'form.targetResolved': '目标仓库 {repo}（服务器 {server}），取自工作区 {root}',
+      'form.createNeedTarget': '先选一个目标：已绑定的工作区，或在「手动指定仓库」里填 owner/name。',
       'form.title': '标题',
       'form.titlePlaceholder': '一句话说清问题',
       'form.body': '正文',
@@ -411,6 +420,14 @@ window.__ModuleLoader__.load({
 
       'form.createTitle': 'New issue',
       'form.editTitle': 'Edit issue',
+      'form.targetMode': 'Create in',
+      'form.targetWorkspace': 'Bound workspace',
+      'form.targetManual': 'Pick a repository',
+      'form.targetWorkspaceLabel': 'Workspace',
+      'form.targetPick': 'Choose a workspace…',
+      'form.targetNone': 'No workspace is bound to a repository yet. Bind one in the workspace board\u2019s binding settings, or switch to "Pick a repository".',
+      'form.targetResolved': 'Target {repo} on {server}, from workspace {root}',
+      'form.createNeedTarget': 'Pick a target first: a bound workspace, or type owner/name under "Pick a repository".',
       'form.title': 'Title',
       'form.titlePlaceholder': 'One line that says it',
       'form.body': 'Description',
@@ -2346,16 +2363,32 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 新建 issue 前的目标选择：服务器 + owner/repo，可从我拥有的仓库里挑。
+     * 新建 issue 前的目标选择。
+     *
+     * **默认按「已绑定的工作区」选**：全局看板是跨工作区的视图，但一条新 issue 总要落在某个
+     * 仓库上；用户真正知道的是「这是哪个工作区的活」，绑定里已经写死了它的仓库 —— 让用户再从
+     * 几百个仓库里手挑一个，既慢又容易挑错（issue #6）。所以第一档是工作区下拉（只列**已绑定
+     * 仓库**的工作区，选中即得到 `{serverId, owner, repo}`），第二档「手动指定仓库」保留原来的
+     * owner/name 输入 + 「我拥有的仓库」候选，用于临时往一个没绑过的工作区仓库里提 issue。
+     *
      * @param props - `api` / `t` / `config` / `value` / `onChange`。
+     *   `value` 是 `{ serverId, owner, repo }`，与 `IssueEditorView` 的 target 同形。
      */
     function TargetPicker({ api, t, config, value, onChange }) {
       const [repos, setRepos] = React.useState([])
+      /**
+       * 用户显式点过的模式（`null` = 还没点过）。没点过时按「有没有已绑定的工作区」自动选：
+       * 有绑定就走工作区那一档，一个绑定都没有就直接落在手填那一档 —— 否则用户会看到一个
+       * 「先在工作区看板里绑一个」的死胡同，而表单永远不出现。
+       */
+      const [pickedMode, setPickedMode] = React.useState(null)
       const serverId = value.serverId
+      const bindingList = bindingOptions(config)
+      const mode = pickedMode ?? (bindingList.length === 0 ? 'manual' : 'workspace')
 
       React.useEffect(() => {
         let alive = true
-        if (serverId === '') {
+        if (mode !== 'manual' || serverId === '') {
           setRepos([])
           return () => { alive = false }
         }
@@ -2363,34 +2396,177 @@ window.__ModuleLoader__.load({
           if (alive && result.ok) setRepos(result.data ?? [])
         })
         return () => { alive = false }
-      }, [api, serverId])
+      }, [api, serverId, mode])
 
-      return h('div', { className: 'dsh-gti-field-row' },
-        h('div', { className: 'dsh-gti-field' },
-          h('label', { className: 'dsh-gti-field-label' }, t('filter.server')),
-          h('select', {
-            className: 'dsh-gti-select',
-            value: serverId,
-            'data-gti-target-server': 'true',
-            onChange: (event) => onChange({ ...value, serverId: event.target.value }),
-          }, (config?.servers ?? []).map((server) => h('option', { key: server.id, value: server.id }, server.name)))),
-        h('div', { className: 'dsh-gti-field' },
-          h('label', { className: 'dsh-gti-field-label' }, t('binding.repo')),
-          h('input', {
-            className: 'dsh-gti-input',
-            placeholder: 'owner/name',
-            list: 'dsh-gti-repo-list',
-            value: value.owner === '' ? '' : `${value.owner}/${value.repo}`,
-            'data-gti-target-repo': 'true',
-            onChange: (event) => {
-              const text = event.target.value.trim().replace(/^\/+/, '')
-              const cut = text.indexOf('/')
-              if (cut === -1) onChange({ ...value, owner: text, repo: '' })
-              else onChange({ ...value, owner: text.slice(0, cut), repo: text.slice(cut + 1) })
-            },
-          })),
-        h('datalist', { id: 'dsh-gti-repo-list' },
-          repos.map((repo) => h('option', { key: repo.fullName, value: repo.fullName }))))
+      const picked = bindingList.find((item) => item.serverId === value.serverId &&
+        item.owner === value.owner && item.repo === value.repo)
+
+      /**
+       * 切档。
+       *
+       * 切到**工作区档**时要把「手填的仓库」清掉：那个仓库多半不在绑定里，留着它会让下拉显示
+       * 「选择工作区…」而下面的表单已经拿 `acme/widgets` 准备提交 —— 界面与真正的目标对不上，
+       * 是比「多点一下」严重得多的错。此时若只剩一个绑定就直接换成它（用户意图明确）。
+       *
+       * 切到**手动档**时保留当前目标（大多就是某个绑定），用户可以在它基础上改。
+       *
+       * @param next - `workspace` / `manual`。
+       * @returns 无。
+       */
+      const switchMode = (next) => {
+        setPickedMode(next)
+        if (next !== 'workspace') return
+        if (picked !== undefined) return
+        if (bindingList.length === 1) {
+          onChange({ serverId: bindingList[0].serverId, owner: bindingList[0].owner, repo: bindingList[0].repo })
+          return
+        }
+        if (value.owner !== '' || value.repo !== '') onChange({ serverId: value.serverId, owner: '', repo: '' })
+      }
+
+      return h('div', { className: 'dsh-gti-form', style: { padding: '0' } },
+        h('div', { className: 'dsh-gti-seg', role: 'group', 'aria-label': t('form.targetMode'), 'data-gti-target-mode-switch': 'true' },
+          ['workspace', 'manual'].map((item) => h('button', {
+            key: item,
+            type: 'button',
+            className: 'dsh-gti-seg-button',
+            'data-gti-target-mode': item,
+            'data-active': mode === item ? 'true' : 'false',
+            onClick: () => switchMode(item),
+          }, item === 'workspace' ? t('form.targetWorkspace') : t('form.targetManual')))),
+        mode === 'workspace'
+          ? h('div', { className: 'dsh-gti-field' },
+            h('label', { className: 'dsh-gti-field-label' }, t('form.targetWorkspaceLabel')),
+            bindingList.length === 0
+              ? h('p', { className: 'dsh-gti-note', 'data-gti-target-empty': 'true' }, t('form.targetNone'))
+              : [
+                h('select', {
+                  key: 'picker',
+                  className: 'dsh-gti-select',
+                  value: picked === undefined ? '' : bindingKey(picked),
+                  'data-gti-target-workspace': 'true',
+                  onChange: (event) => {
+                    const next = bindingList.find((item) => bindingKey(item) === event.target.value)
+                    if (next === undefined) return
+                    // 换工作区 = 换整个目标（服务器也一起换），别把上一个的仓库名残留在输入框里。
+                    onChange({ serverId: next.serverId, owner: next.owner, repo: next.repo })
+                  },
+                }, [h('option', { key: '', value: '' }, t('form.targetPick'))]
+                  .concat(bindingList.map((item) => h('option', { key: bindingKey(item), value: bindingKey(item) },
+                    `${item.owner}/${item.repo} \u2014 ${item.root}`)))),
+                picked === undefined
+                  ? null
+                  : h('p', { key: 'resolved', className: 'dsh-gti-note', 'data-gti-target-resolved': 'true' },
+                    t('form.targetResolved', {
+                      repo: `${picked.owner}/${picked.repo}`,
+                      server: serverName(config, picked.serverId),
+                      root: picked.root,
+                    })),
+              ])
+          : [
+            h('div', { key: 'manual', className: 'dsh-gti-field-row' },
+              h('div', { className: 'dsh-gti-field' },
+                h('label', { className: 'dsh-gti-field-label' }, t('filter.server')),
+                h('select', {
+                  className: 'dsh-gti-select',
+                  value: serverId,
+                  'data-gti-target-server': 'true',
+                  onChange: (event) => onChange({ ...value, serverId: event.target.value }),
+                }, (config?.servers ?? []).map((server) => h('option', { key: server.id, value: server.id }, server.name)))),
+              h('div', { className: 'dsh-gti-field' },
+                h('label', { className: 'dsh-gti-field-label' }, t('binding.repo')),
+                h('input', {
+                  className: 'dsh-gti-input',
+                  placeholder: 'owner/name',
+                  list: 'dsh-gti-repo-list',
+                  value: value.owner === '' ? '' : `${value.owner}/${value.repo}`,
+                  'data-gti-target-repo': 'true',
+                  onChange: (event) => {
+                    const text = event.target.value.trim().replace(/^\/+/, '')
+                    const cut = text.indexOf('/')
+                    if (cut === -1) onChange({ ...value, owner: text, repo: '' })
+                    else onChange({ ...value, owner: text.slice(0, cut), repo: text.slice(cut + 1) })
+                  },
+                }))),
+            h('datalist', { key: 'list', id: 'dsh-gti-repo-list' },
+              repos.map((repo) => h('option', { key: repo.fullName, value: repo.fullName }))),
+          ])
+    }
+
+    /**
+     * 已绑定仓库的工作区清单：`[{ root, serverId, owner, repo }]`，按 root 排序。
+     *
+     * `config.bindings` 是 `servers.json` 的 `bindings` 原样（键是工作区根）。**自动侦测的
+     * 工作区不在里面**（那要逐个读 `.git/config`，得先知道有哪些工作区）—— 那类工作区用
+     * 「手动指定仓库」那条路提 issue；把「有绑定的」放第一档已经覆盖绝大多数场景。
+     *
+     * 指向已删除服务器 / 缺字段的绑定直接跳过：下拉里给一个点了会 404 的选项比没有更糟。
+     *
+     * @param config - `config.get` 的应答（可能为 null）。
+     * @returns 可用的绑定选项。
+     */
+    function bindingOptions(config) {
+      const servers = new Set((config?.servers ?? []).map((server) => server.id))
+      return Object.entries(config?.bindings ?? {})
+        .filter(([, binding]) => servers.has(binding?.serverId) &&
+          typeof binding.owner === 'string' && binding.owner !== '' &&
+          typeof binding.repo === 'string' && binding.repo !== '')
+        .map(([root, binding]) => ({ root, serverId: binding.serverId, owner: binding.owner, repo: binding.repo }))
+        .sort((left, right) => left.root.localeCompare(right.root))
+    }
+
+    /**
+     * 绑定选项在下拉里的值（root 唯一，同仓库的两个工作区要能分开选）。
+     * @param item - `bindingOptions` 的一项。
+     * @returns 下拉值。
+     */
+    function bindingKey(item) {
+      return item.root
+    }
+
+    /**
+     * 服务器 id → 显示名（找不到就回 id，别渲染出 `undefined`）。
+     * @param config - `config.get` 的应答。
+     * @param serverId - 服务器 id。
+     * @returns 显示名。
+     */
+    function serverName(config, serverId) {
+      return (config?.servers ?? []).find((server) => server.id === serverId)?.name ?? serverId
+    }
+
+    /**
+     * 点「新建 issue」时预填的目标。
+     *
+     * 目标是**已绑定的工作区**，不是一个空仓库（issue #6）：绑定已经把「这个工作区对应哪个
+     * 仓库」定死了，用户从工作区过来时心里想的是「在这个工作区的仓库里提一条」。筛选条里的
+     * 服务器 / 所属只是**列表的收窄条件**，不该反过来决定新 issue 落在哪 —— 所以只在它能唯一定位
+     * 到一个绑定时才用来挑默认值。
+     *
+     * 预填策略（宁可让用户多点一下，也不猜错仓库）：
+     * - 只有一个绑定 → 直接选它；
+     * - 多个绑定 → 当前筛选（服务器 + owner）能唯一定位到一个就选它，否则不预选，让用户选；
+     * - 一个绑定都没有 → 退回旧行为（当前筛选的服务器 + 空仓库，让用户手填）。
+     *
+     * @param config - `config.get` 的应答（可能为 null）。
+     * @param query - 当前筛选 `{ serverId, owner }`。
+     * @returns `{ serverId, owner, repo }`。
+     */
+    function initialCreateTarget(config, query) {
+      const options = bindingOptions(config)
+      const narrowed = options.filter((item) =>
+        (query.serverId === '' || item.serverId === query.serverId) &&
+        (query.owner === '' || item.owner === query.owner))
+      const preferred = options.length === 1
+        ? options[0]
+        : (narrowed.length === 1 ? narrowed[0] : undefined)
+      if (preferred !== undefined) {
+        return { serverId: preferred.serverId, owner: preferred.owner, repo: preferred.repo }
+      }
+      return {
+        serverId: query.serverId === '' ? (config?.servers?.[0]?.id ?? '') : query.serverId,
+        owner: '',
+        repo: '',
+      }
     }
 
     /**
@@ -2478,7 +2654,7 @@ window.__ModuleLoader__.load({
             'data-primary': 'true',
             disabled: config === null || (config.servers ?? []).length === 0,
             'data-gti-new': 'true',
-            onClick: () => setView({ kind: 'create', serverId: query.serverId === '' ? (config.servers[0]?.id ?? '') : query.serverId, owner: query.owner, repo: '' }),
+            onClick: () => setView({ kind: 'create', ...initialCreateTarget(config, query) }),
           }, t('issue.new')),
           h('button', {
             type: 'button',
@@ -2550,7 +2726,7 @@ window.__ModuleLoader__.load({
                 onDone: () => { void reloadConfig(); setView({ kind: 'list' }) },
                 onCancel: () => setView({ kind: 'list' }),
               })
-              : h('p', { className: 'dsh-gti-note' }, t('binding.repo'))))
+              : h('p', { className: 'dsh-gti-note', 'data-gti-create-blocked': 'true' }, t('form.createNeedTarget'))))
       }
 
       if (view.kind === 'edit') {

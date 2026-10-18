@@ -19,7 +19,10 @@ export const FIXTURES = {
       tokenEnv: null,
       token: { configured: true, source: 'record', writable: true },
     }],
-    bindings: {},
+    bindings: {
+      '/work/mylike': { serverId: 'srv-a', owner: 'dongasai', repo: 'mylike', updatedAt: '2026-10-16T02:49:15.723Z' },
+      '/work/other': { serverId: 'srv-a', owner: 'dongasai', repo: 'other', updatedAt: '2026-10-16T02:51:34.370Z' },
+    },
     credentialsAvailable: true,
     storage: '/tmp/gitea-task-issues/servers.json',
   },

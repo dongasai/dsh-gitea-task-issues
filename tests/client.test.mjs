@@ -161,7 +161,7 @@ test('全局看板：渲染出服务器、issue 列表与详情，交互可达',
   assert.ok(calls.some((call) => call.op === 'repo.meta'))
 })
 
-test('全局看板：新建流程（选目标 → 填标题 → 提交）', async () => {
+test('全局看板：新建默认从「已绑定的工作区」选目标，选了就出现表单', async () => {
   const { fake, mini } = await newWorld()
   const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
 
@@ -171,13 +171,26 @@ test('全局看板：新建流程（选目标 → 填标题 → 提交）', asyn
   create.props.onClick()
   text = await mini.render(mini.React.createElement(GlobalBoard, {}))
   assert.deepEqual(mini.errors, [])
-  assert.ok(findNode(mini, (node) => node.props?.['data-gti-target-repo'] !== undefined), '新建页缺目标选择')
 
-  // 填目标仓库 → 出现表单
-  const target = findNode(mini, (node) => node.props?.['data-gti-target-repo'] !== undefined)
-  target.props.onChange({ target: { value: 'dongasai/mylike' } })
+  // issue #6 的核心：默认档是「已绑定的工作区」，不是让用户从几百个仓库里手挑。
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-target-workspace'] !== undefined),
+    '新建页的默认目标选择应当是「已绑定的工作区」下拉')
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-target-mode'] === 'workspace'), '默认模式必须是工作区')
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-target-repo']), undefined,
+    '工作区档下不该再出现手填 owner/name（那是「手动指定仓库」档的事）')
+  // 绑定有两个（/work/mylike、/work/other），筛选也没收窄 → 不预选，让用户点，绝不猜仓库。
+  const picker = findNode(mini, (node) => node.props?.['data-gti-target-workspace'] !== undefined)
+  assert.equal(picker.props.value, '', '多个绑定且筛选未收窄时不该替用户预选一个仓库')
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-form-title']), undefined,
+    '还没选目标就不该出现表单')
+
+  // 选工作区 → 目标就是该工作区绑定的仓库，表单出现。
+  picker.props.onChange({ target: { value: '/work/other' } })
   text = await mini.render(mini.React.createElement(GlobalBoard, {}))
   assert.deepEqual(mini.errors, [])
+  assert.match(text, /dongasai\/other/, '选完工作区应当显示它绑定的仓库')
+  assert.match(text, /\/work\/other/, '还应当说明这个仓库是从哪个工作区来的')
+
   const title = findNode(mini, (node) => node.props?.['data-gti-form-title'] !== undefined)
   assert.ok(title, '选好目标后应出现标题输入框')
   title.props.onChange({ target: { value: '从界面新建' } })
@@ -187,8 +200,82 @@ test('全局看板：新建流程（选目标 → 填标题 → 提交）', asyn
   calls.length = 0
   submit.props.onClick()
   await mini.render(mini.React.createElement(GlobalBoard, {}))
-  assert.ok(calls.some((call) => call.op === 'gitea.call' && call.params.op === 'issue.create' && call.params.params.title === '从界面新建'),
-    `提交没有发出 issue.create：${JSON.stringify(calls)}`)
+  const created = calls.find((call) => call.op === 'gitea.call' && call.params.op === 'issue.create')
+  assert.ok(created, `提交没有发出 issue.create：${JSON.stringify(calls)}`)
+  assert.equal(created.params.params.owner, 'dongasai', 'issue 要落在这个工作区绑定的 owner 下')
+  assert.equal(created.params.params.repo, 'other', 'issue 要落在这个工作区绑定的仓库里')
+  assert.equal(created.params.params.title, '从界面新建')
+})
+
+test('全局看板：新建可以切到「手动指定仓库」，owner/name 仍然能用', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => node.props?.['data-gti-new'] === 'true').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  // 切到手动档：给「临时往一个没绑过的工作区仓库提 issue」留出口子。
+  findNode(mini, (node) => node.props?.['data-gti-target-mode'] === 'manual').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.deepEqual(mini.errors, [])
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-target-server'] !== undefined), '手动档要有服务器下拉')
+  const target = findNode(mini, (node) => node.props?.['data-gti-target-repo'] !== undefined)
+  assert.ok(target, '手动档要有 owner/name 输入框')
+
+  target.props.onChange({ target: { value: 'acme/widgets' } })
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.deepEqual(mini.errors, [])
+  const title = findNode(mini, (node) => node.props?.['data-gti-form-title'] !== undefined)
+  assert.ok(title, '填好 owner/name 后应出现表单')
+  title.props.onChange({ target: { value: '手动选的仓库' } })
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  calls.length = 0
+  findNode(mini, (node) => node.props?.['data-gti-form-submit'] === 'true').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const created = calls.find((call) => call.op === 'gitea.call' && call.params.op === 'issue.create')
+  assert.ok(created, `提交没有发出 issue.create：${JSON.stringify(calls)}`)
+  assert.equal(created.params.params.owner, 'acme')
+  assert.equal(created.params.params.repo, 'widgets')
+})
+
+test('全局看板：一个绑定都没有时直接落在「手动指定仓库」档，不出现死胡同', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+  const saved = FIXTURES.config.bindings
+  try {
+    FIXTURES.config.bindings = {}
+    let text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+    findNode(mini, (node) => node.props?.['data-gti-new'] === 'true').props.onClick()
+    text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+    assert.deepEqual(mini.errors, [])
+    assert.equal(findNode(mini, (node) => node.props?.['data-gti-target-mode'] === 'workspace').props['data-active'], 'false',
+      '没有绑定就不该停在工作区档')
+    assert.ok(findNode(mini, (node) => node.props?.['data-gti-target-repo'] !== undefined),
+      '没有绑定时要直接给出 owner/name 输入框')
+  } finally {
+    FIXTURES.config.bindings = saved
+  }
+})
+
+test('全局看板：只有一个绑定时直接预选它（点新建就能填标题）', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+  const saved = FIXTURES.config.bindings
+  try {
+    FIXTURES.config.bindings = {
+      '/work/only': { serverId: 'srv-a', owner: 'dongasai', repo: 'solo', updatedAt: '2026-10-16T02:49:15.723Z' },
+    }
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+    findNode(mini, (node) => node.props?.['data-gti-new'] === 'true').props.onClick()
+    const text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+    assert.deepEqual(mini.errors, [])
+    assert.ok(findNode(mini, (node) => node.props?.['data-gti-form-title'] !== undefined),
+      '只有一个绑定时应当直接预选、表单立刻可用')
+    assert.match(text, /dongasai\/solo/, '目标仓库应当是那个唯一绑定的仓库')
+    assert.match(text, /取自工作区 \/work\/only/, '要把「目标是从哪个工作区推出来的」写出来')
+  } finally {
+    FIXTURES.config.bindings = saved
+  }
 })
 
 test('全局看板：服务器管理页渲染并探活', async () => {
@@ -636,4 +723,39 @@ test('zh / en 键集必须逐字一致（AGENTS 说「探针会拦」，这条�
   const autoKeys = zh.filter((key) => key.startsWith('auto.'))
   assert.ok(autoKeys.length > 0, '自动分配的文案键不见了')
   for (const key of autoKeys) assert.ok(en.includes(key), `en 缺 ${key}`)
+})
+
+test('全局看板：手填过仓库再切回「已绑定的工作区」，界面与目标必须重新对齐', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => node.props?.['data-gti-new'] === 'true').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  // 先手填一个**不在绑定里**的仓库 —— 这时表单已经可用。
+  findNode(mini, (node) => node.props?.['data-gti-target-mode'] === 'manual').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => node.props?.['data-gti-target-repo'] !== undefined).props.onChange({ target: { value: 'acme/widgets' } })
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-form-title'] !== undefined), '手填后表单应当可用')
+
+  // 切回工作区档：下拉不能显示「选择工作区…」却仍旧拿 acme/widgets 准备提交。
+  findNode(mini, (node) => node.props?.['data-gti-target-mode'] === 'workspace').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.deepEqual(mini.errors, [])
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-form-title']), undefined,
+    '切回工作区档后目标已清空，表单不该还留在那里')
+  const picker = findNode(mini, (node) => node.props?.['data-gti-target-workspace'] !== undefined)
+  assert.equal(picker.props.value, '', '多个绑定时应重新要求用户选一个')
+
+  picker.props.onChange({ target: { value: '/work/mylike' } })
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  calls.length = 0
+  findNode(mini, (node) => node.props?.['data-gti-form-title']).props.onChange({ target: { value: '切档后新建' } })
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => node.props?.['data-gti-form-submit'] === 'true').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const created = calls.find((call) => call.op === 'gitea.call' && call.params.op === 'issue.create')
+  assert.ok(created, `提交没有发出 issue.create：${JSON.stringify(calls)}`)
+  assert.equal(created.params.params.repo, 'mylike', '提交的目标必须是重新选中的工作区仓库，不是手填那个')
 })
