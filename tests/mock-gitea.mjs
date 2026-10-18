@@ -86,7 +86,15 @@ export async function startMockGitea() {
       if (path === '/repos/issues/search') {
         const stateFilter = url.searchParams.get('state') ?? 'open'
         const owner = url.searchParams.get('owner')
-        return send(200, state.issues.filter((issue) => matchesState(issue, stateFilter) && (owner === null || issue.owner === owner)))
+        // `assigned=true` 是 Gitea 的「指派给当前令牌用户」，mock 的令牌用户是 tester。
+        const assigned = url.searchParams.get('assigned') === 'true'
+        const since = url.searchParams.get('since')
+        return send(200, state.issues.filter((issue) => (
+          matchesState(issue, stateFilter)
+          && (owner === null || issue.owner === owner)
+          && (!assigned || issue.assignees.some((person) => person.login === 'tester'))
+          && (since === null || Date.parse(issue.updated_at) > Date.parse(since))
+        )))
       }
 
       if (segments[0] !== 'repos' || segments.length < 3) return fail(404, 'Not Found')
@@ -122,7 +130,14 @@ export async function startMockGitea() {
         const id = Number(rest[2])
         const comment = state.comments.find((item) => item.id === id)
         if (rest.length === 2) {
-          if (req.method === 'GET') return send(200, state.comments)
+          if (req.method === 'GET') {
+            // 仓库级评论列表支持 since / page / limit（Gitea 1.27.3 实测）。
+            const since = url.searchParams.get('since')
+            const page = Number(url.searchParams.get('page') ?? '1')
+            const limit = Number(url.searchParams.get('limit') ?? '50')
+            const filtered = state.comments.filter((item) => since === null || Date.parse(item.updated_at) > Date.parse(since))
+            return send(200, filtered.slice((page - 1) * limit, page * limit))
+          }
           return fail(405, 'Method Not Allowed')
         }
         if (comment === undefined) return fail(404, 'Not Found')
@@ -181,6 +196,7 @@ export async function startMockGitea() {
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
               html_url: `http://localhost/${owner}/${repo}/issues/${index}#issuecomment-${state.nextComment}`,
+              issue_url: `http://localhost/api/v1/repos/${owner}/${repo}/issues/${index}`,
               issue_number: index,
             }
             state.nextComment += 1

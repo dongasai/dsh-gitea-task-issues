@@ -1,13 +1,13 @@
 {
   "name": "@dongasai/dsh-gitea-task-issues",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Gitea issues for DeepSeek Harness: bind a workspace to a Gitea repository, then work the issue board in the global panel and the right sidebar, with a matching set of model-facing gitea_* tools.",
+  "description": "Gitea issues for DeepSeek Harness: bind a workspace to a Gitea repository, then work the issue board in the global panel and the right sidebar, with a matching set of model-facing gitea_* tools, plus opt-in automatic task assignment that opens a session when a workspace is idle.",
   "icon": "./icon.svg",
   "meta": {
     "title": "Gitea 任务 issues",
-    "description": "把工作区绑到 Gitea 仓库：全局看板 + 右侧栏看板里增删改查 issues、评论、附件、指派、依赖、订阅、Pin、Label、Lock 与工时；模型侧另有一套 gitea_* 工具。"
+    "description": "把工作区绑到 Gitea 仓库：全局看板 + 右侧栏看板里增删改查 issues、评论、附件、指派、依赖、订阅、Pin、Label、Lock 与工时；模型侧另有一套 gitea_* 工具；另有默认关闭的自动分配（工作区空闲时把指派给我的任务开成新会话）。"
   },
   "exports": {
     ".": "./index.js",

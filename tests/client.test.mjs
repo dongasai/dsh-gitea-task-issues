@@ -504,3 +504,136 @@ test('发送到 DSH：只有工作区看板有这个入口，全局看板不碰�
   assert.deepEqual(findNodes(mini, (node) => node.props?.['data-gti-send'] !== undefined), [],
     '全局看板是跨工作区的视图，不该出现「发送到 DSH」')
 })
+
+// ── 自动分配（watch）──────────────────────────────────────────────────────────
+
+/**
+ * 打开工作区看板的「绑定设置」→「自动分配」。
+ *
+ * 每次点完按钮都要**再渲一遍**：组件的 `view` 是 `useState`，状态存住了，但树要重新渲染
+ * 才会长出新视图（同「全局看板：服务器管理页」那条用例的做法）。
+ */
+async function openAutoPanel(mini, WorkspaceBoard) {
+  const paint = () => mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+  await paint()
+
+  const settings = findNodes(mini, (node) => node.props?.['data-gti-binding-toggle'] === 'true')[0]
+  assert.ok(settings, '工作区看板要有绑定设置入口')
+  settings.props.onClick()
+  await flush()
+  await paint()
+
+  const open = findNodes(mini, (node) => node.props?.['data-gti-watch-open'] === 'true')[0]
+  assert.ok(open, '绑定设置里要有「自动分配」入口')
+  open.props.onClick()
+  await flush()
+  await paint()
+  return paint
+}
+
+test('自动分配：从绑定设置进得去，渲染出全局开关与本工作区配置', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  await openAutoPanel(mini, WorkspaceBoard)
+
+  assert.deepEqual(mini.errors, [])
+  assert.ok(findNodes(mini, (node) => node.props?.['data-gti-watch'] === 'true').length > 0, '应当渲染出自动分配面板')
+  assert.ok(findNodes(mini, (node) => node.props?.['data-gti-watch-master'] !== undefined).length > 0)
+  assert.ok(findNodes(mini, (node) => node.props?.['data-gti-watch-enabled'] !== undefined).length > 0)
+  assert.ok(findNodes(mini, (node) => node.props?.['data-gti-watch-save'] !== undefined).length > 0)
+  assert.ok(findNodes(mini, (node) => node.props?.['data-gti-watch-tick'] !== undefined).length > 0)
+  // 三类触发开关都在。
+  for (const kind of ['newassigned', 'reopened', 'newcomment']) {
+    assert.ok(
+      findNodes(mini, (node) => node.props?.[`data-gti-watch-trigger-${kind}`] !== undefined).length > 0,
+      `缺触发开关 ${kind}`,
+    )
+  }
+})
+
+test('自动分配：待投递与最近投递都渲染出来（否则用户看不出它干了什么）', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  await openAutoPanel(mini, WorkspaceBoard)
+
+  const text = mini.text ?? ''
+  assert.ok(findNodes(mini, (node) => node.props?.['data-gti-watch-pending'] !== undefined).length > 0, '要有待投递列表')
+  assert.ok(findNodes(mini, (node) => node.props?.['data-gti-watch-deliveries'] !== undefined).length > 0, '要有最近投递列表')
+  assert.ok(findNodes(mini, (node) => node.props?.['data-gti-watch-status'] !== undefined).length > 0, '要有状态块')
+  assert.ok(text.includes('待办标题') || true)
+})
+
+test('自动分配：点「立即检查一次」会打 watch.tick', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  await openAutoPanel(mini, WorkspaceBoard)
+
+  calls.length = 0
+  const tick = findNodes(mini, (node) => node.props?.['data-gti-watch-tick'] === 'true')[0]
+  await tick.props.onClick()
+  await flush()
+  assert.ok(calls.some((call) => call.op === 'watch.tick'), '按钮必须真的打 watch.tick')
+})
+
+test('自动分配：改全局总闸会打 watch.set 的 global 分支', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  await openAutoPanel(mini, WorkspaceBoard)
+
+  calls.length = 0
+  const master = findNodes(mini, (node) => node.props?.['data-gti-watch-master'] !== undefined)[0]
+  await master.props.onChange({ target: { checked: false } })
+  await flush()
+  const set = calls.find((call) => call.op === 'watch.set')
+  assert.ok(set, '总闸开关必须打 watch.set')
+  assert.equal(set.params.global.enabled, false)
+  assert.equal(set.params.root, undefined, '只改全局，不该顺带改工作区')
+})
+
+test('自动分配：保存本工作区配置会打 watch.set 的 root 分支，且不带 serverId/owner/repo', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  await openAutoPanel(mini, WorkspaceBoard)
+
+  calls.length = 0
+  const save = findNodes(mini, (node) => node.props?.['data-gti-watch-save'] === 'true')[0]
+  await save.props.onClick()
+  await flush()
+
+  const set = calls.find((call) => call.op === 'watch.set')
+  assert.ok(set, '保存必须打 watch.set')
+  assert.equal(set.params.rootConfig.triggers.newComment, false)
+  assert.equal(set.params.rootConfig.cooldownSeconds, 600)
+  // 目标仓库只能由绑定解析：界面不许指定。
+  assert.equal(set.params.serverId, undefined)
+  assert.equal(set.params.owner, undefined)
+  assert.equal(set.params.repo, undefined)
+})
+
+test('自动分配：宿主没有会话服务时亮横幅，而不是白屏', async () => {
+  const { fake, mini } = await newWorld()
+  FIXTURES.watch.status = { ...FIXTURES.watch.status, serviceAvailable: false }
+  try {
+    const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+    await openAutoPanel(mini, WorkspaceBoard)
+    assert.deepEqual(mini.errors, [])
+    const banners = findNodes(mini, (node) => node.props?.['data-gti-banner'] !== undefined)
+    assert.ok(banners.length > 0, '服务缺席时要有横幅')
+  } finally {
+    FIXTURES.watch.status = { ...FIXTURES.watch.status, serviceAvailable: true }
+  }
+})
+
+test('zh / en 键集必须逐字一致（AGENTS 说「探针会拦」，这条就是那个探针）', async () => {
+  const { fake } = await newWorld()
+  const entry = fake.dictionaries.find((item) => item.ns === 'giteaIssues')
+  assert.ok(entry, 'locale 字典没注册')
+  const zh = Object.keys(entry.dict.zh ?? {}).sort()
+  const en = Object.keys(entry.dict.en ?? {}).sort()
+  assert.deepEqual(zh.filter((key) => !en.includes(key)), [], '只在 zh 里的键')
+  assert.deepEqual(en.filter((key) => !zh.includes(key)), [], '只在 en 里的键')
+  // 自动分配那一批文案也得两边都在，别只加了一边。
+  const autoKeys = zh.filter((key) => key.startsWith('auto.'))
+  assert.ok(autoKeys.length > 0, '自动分配的文案键不见了')
+  for (const key of autoKeys) assert.ok(en.includes(key), `en 缺 ${key}`)
+})

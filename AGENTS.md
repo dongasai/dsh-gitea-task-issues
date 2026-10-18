@@ -7,16 +7,18 @@
 ## 项目是什么
 
 `@dongasai/dsh-gitea-task-issues` —— DSH 插件，一个包两半：**Host 半边** [index.js](index.js)
-注册唯一一条桥接路由 `POST /gitea-task-issues/api`（[lib/bridge.js](lib/bridge.js)）并注册 7 个
-模型工具（[lib/tools.js](lib/tools.js)）；**浏览器半边** [client.js](client.js) 注册全局看板页
-（`main` 键 `gitea-issues`）、左侧栏面板图标（`sidebar.panellist`，`order: 20`，排在官方
-「自动化任务」的 10 之后）与右侧栏「Gitea issues」看板页签。
+注册唯一一条桥接路由 `POST /gitea-task-issues/api`（[lib/bridge.js](lib/bridge.js)）、注册 7 个
+模型工具（[lib/tools.js](lib/tools.js)），并跑一个**默认关闭**的自动分配轮询器
+（[lib/watch.js](lib/watch.js)：定期把「指派给我的新任务」变成新会话）；
+**浏览器半边** [client.js](client.js) 注册全局看板页（`main` 键 `gitea-issues`）、左侧栏面板图标
+（`sidebar.panellist`，`order: 20`，排在官方「自动化任务」的 10 之后）与右侧栏「Gitea issues」
+看板页签；自动分配的设置页从工作区看板的「绑定设置」进入。
 
 ## 命令
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（45 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（90 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -38,10 +40,14 @@
 | [lib/shape.js](lib/shape.js) | Gitea 对象 → 线上对象（**浏览器半边唯一认的字段集**） |
 | [lib/aggregate.js](lib/aggregate.js) | 详情 / 仓库元信息的一揽子读取（桥与工具共用） |
 | [lib/errors.js](lib/errors.js) | `BridgeError` / `GiteaError` 与状态码映射 |
+| [lib/watch.js](lib/watch.js) | 自动分配轮询器：取数、空闲判定、跨进程锁、退避、投递 |
+| [lib/triggers.js](lib/triggers.js) | **纯函数**：账本 + issues + 评论 → 触发（矩阵的主战场） |
+| [lib/watchstore.js](lib/watchstore.js) | 自动分配账本 `watch.json`：schema、收敛、剪枝 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 45 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 90 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
+| [docs/auto-assign-design.md](docs/auto-assign-design.md) | 自动分配的设计稿：口径、账本、幂等闸门、边界 |
 
 ## 硬性约束（违反即出 bug，别试探）
 
@@ -65,7 +71,12 @@
    `optStringArray` 收敛，非法输入 400，不把脏参数送给 Gitea。
 7. **失败按 `code` / 状态码判别，绝不看 `message`**；上游状态 → 线上码走
    `lib/errors.js` 的 `codeForGiteaStatus`，表里没有的一律 `upstream-error`，不猜。
-8. **不静默重试、不做后台轮询**：读写都可能改变远端状态，一次用户动作一次调用。
+8. **桥不静默重试、不做后台轮询**：读写都可能改变远端状态，一次用户动作一次调用。
+   **例外只有一处：`lib/watch.js` 的自动分配轮询器**（默认关闭、可一键停、每小时有配额、
+   失败可见并退避）。两条边界必须守住：
+   - 轮询器**不走桥**，在本进程内直接调操作表，浏览器永远拿不到令牌；
+   - 除它以外任何地方都不许起定时器去打 Gitea。想把这条口子开大时，先读
+     [docs/auto-assign-design.md](docs/auto-assign-design.md) 的「为什么可以开这个口子」。
 9. **破坏性动作要能说清后果**：删除服务器会连带删掉它的令牌记录与指向它的绑定；
    issue / 评论 / 附件删除不可撤销（界面二次确认）。
 10. **模型工具必须工作区隔离**：7 个 `gitea_issue_*` 工具的**参数里不能有** `server` / `repo`

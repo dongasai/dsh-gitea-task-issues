@@ -242,6 +242,54 @@ window.__ModuleLoader__.load({
       'servers.user': '令牌用户：{login}',
       'servers.ok': '连接正常',
 
+      // 「自动分配」：定期把指派给我的 issue 变成新会话。默认关闭。
+      'auto.title': '自动分配任务',
+      'auto.open': '自动分配',
+      'auto.enable': '启用自动分配',
+      'auto.enableHint': '打开后每隔一段时间检查一次，有新任务就开一个新会话去处理。',
+      'auto.master': '总开关',
+      'auto.interval': '检查间隔（秒）',
+      'auto.quota': '每小时最多开会话',
+      'auto.dryRun': '只记账不投递（演练）',
+      'auto.trigger.newAssigned': '新 issue 指派给我',
+      'auto.trigger.reopened': '我负责的 issue 被重新打开',
+      'auto.trigger.newComment': '我负责的 issue 有新评论',
+      'auto.cooldown': '同一 issue 冷却（秒）',
+      'auto.daily': '单 issue 每日上限',
+      'auto.giveUp': '等待上限（小时）',
+      'auto.preset': 'Agent 预设（留空用宿主默认）',
+      'auto.save': '保存设置',
+      'auto.tick': '立即检查一次',
+      'auto.ticking': '检查中…',
+      'auto.state': '运行状态',
+      'auto.state.enabled': '总开关：开',
+      'auto.state.disabled': '总开关：关',
+      'auto.state.repo': '仓库',
+      'auto.state.watermark': '上次检查',
+      'auto.state.baseline': '基线时刻（这之前的历史不会被投递）',
+      'auto.state.next': '下次检查',
+      'auto.state.locked': '本进程未持有轮询锁（另一进程在投递）',
+      'auto.state.unavailable': '当前宿主没有会话服务，无法自动开会话（看板与工具仍然可用）。',
+      'auto.pending': '待投递',
+      'auto.pending.empty': '没有待投递的任务。',
+      'auto.pending.since': '等待自 {at}',
+      'auto.deliveries': '最近投递',
+      'auto.deliveries.empty': '还没有投递记录。',
+      'auto.outcome.prompted': '已投递',
+      'auto.outcome.busy-skipped': '工作区忙，已跳过',
+      'auto.outcome.failed': '失败',
+      'auto.outcome.expired': '等待超时，已放弃',
+      'auto.outcome.dry-run': '演练：只记账未投递',
+      'auto.replay': '重放',
+      'auto.replayHint': '把这条重新排进待投递（write-ahead 之后会话没起来时用）',
+      'auto.error': '上次失败：{code}——{message}',
+      'auto.kind.newAssigned': '新指派',
+      'auto.kind.reopened': '重新打开',
+      'auto.kind.newComment': '新评论',
+      'auto.needBinding': '先绑定仓库，才能配置自动分配。',
+      'auto.saved': '已保存。',
+      'auto.tickDone': '本轮投递 {n} 个会话。',
+      'auto.repoMismatch': '绑定的仓库变了，请重新保存自动分配配置。',
       'binding.title': '工作区绑定',
       'binding.repo': '仓库（owner/name）',
       'binding.server': '服务器',
@@ -426,6 +474,54 @@ window.__ModuleLoader__.load({
       'servers.user': 'Token user: {login}',
       'servers.ok': 'Reachable',
 
+      // Automatic assignment: turn assigned issues into new sessions. Off by default.
+      'auto.title': 'Automatic task assignment',
+      'auto.open': 'Auto assign',
+      'auto.enable': 'Enable automatic assignment',
+      'auto.enableHint': 'When on, this workspace is checked periodically and new tasks open a new session.',
+      'auto.master': 'Master switch',
+      'auto.interval': 'Check interval (seconds)',
+      'auto.quota': 'Max sessions per hour',
+      'auto.dryRun': 'Record only, do not deliver (dry run)',
+      'auto.trigger.newAssigned': 'A new issue is assigned to me',
+      'auto.trigger.reopened': 'An issue of mine is reopened',
+      'auto.trigger.newComment': 'An issue of mine gets a new comment',
+      'auto.cooldown': 'Cooldown per issue (seconds)',
+      'auto.daily': 'Daily cap per issue',
+      'auto.giveUp': 'Give up after (hours)',
+      'auto.preset': 'Agent preset (empty uses host default)',
+      'auto.save': 'Save',
+      'auto.tick': 'Check now',
+      'auto.ticking': 'Checking…',
+      'auto.state': 'Status',
+      'auto.state.enabled': 'Master switch: on',
+      'auto.state.disabled': 'Master switch: off',
+      'auto.state.repo': 'Repository',
+      'auto.state.watermark': 'Last check',
+      'auto.state.baseline': 'Baseline (history before this is never delivered)',
+      'auto.state.next': 'Next check',
+      'auto.state.locked': 'This process does not hold the poll lock (another process is delivering).',
+      'auto.state.unavailable': 'This host mounts no session service, so no session can be opened (the board and tools still work).',
+      'auto.pending': 'Pending',
+      'auto.pending.empty': 'Nothing pending.',
+      'auto.pending.since': 'waiting since {at}',
+      'auto.deliveries': 'Recent deliveries',
+      'auto.deliveries.empty': 'No deliveries yet.',
+      'auto.outcome.prompted': 'delivered',
+      'auto.outcome.busy-skipped': 'workspace busy, skipped',
+      'auto.outcome.failed': 'failed',
+      'auto.outcome.expired': 'gave up after waiting',
+      'auto.outcome.dry-run': 'dry run: recorded, not delivered',
+      'auto.replay': 'Replay',
+      'auto.replayHint': 'Queue this one again (use when a session never came up after write-ahead).',
+      'auto.error': 'Last failure: {code} — {message}',
+      'auto.kind.newAssigned': 'new assignment',
+      'auto.kind.reopened': 'reopened',
+      'auto.kind.newComment': 'new comment',
+      'auto.needBinding': 'Bind a repository first, then configure automatic assignment.',
+      'auto.saved': 'Saved.',
+      'auto.tickDone': 'Delivered {n} session(s) this round.',
+      'auto.repoMismatch': 'The bound repository changed; save the automatic assignment again.',
       'binding.title': 'Workspace binding',
       'binding.repo': 'Repository (owner/name)',
       'binding.server': 'Server',
@@ -656,6 +752,10 @@ window.__ModuleLoader__.load({
         repos: (serverId, q) => callBridge('repo.list', { serverId, q }),
         repoMeta: (params) => callBridge('repo.meta', params),
         issueDetail: (params) => callBridge('issue.detail', params),
+        autoGet: () => callBridge('watch.get'),
+        autoSet: (params) => callBridge('watch.set', params),
+        autoTick: () => callBridge('watch.tick'),
+        autoRequeue: (params) => callBridge('watch.requeue', params),
       }
     }
 
@@ -1720,7 +1820,7 @@ window.__ModuleLoader__.load({
      *
      * @param props - `api` / `t` / `sessionId` / `config` / `binding` / `error` / `reload` / `onChanged`。
      */
-    function BindingPanel({ api, t, sessionId, config, binding, error, reload, onChanged }) {
+    function BindingPanel({ api, t, sessionId, config, binding, error, reload, onChanged, onOpenAuto }) {
       const [draft, setDraft] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
       const [notice, setNotice] = React.useState(null)
@@ -1825,7 +1925,342 @@ window.__ModuleLoader__.load({
               className: 'dsh-gti-button',
               disabled: busy || binding.binding === null,
               onClick: () => void clear(),
-            }, t('binding.clear')))))
+            }, t('binding.clear')),
+            h('button', {
+              type: 'button',
+              className: 'dsh-gti-button',
+              'data-gti-watch-open': 'true',
+              onClick: () => onOpenAuto?.(),
+            }, t('auto.open')))))
+    }
+
+
+    /**
+     * 「自动分配任务」设置面板。
+     *
+     * 两层配置：**全局**（总闸 / 间隔 / 每小时配额 / 演练）与**本工作区**（三类触发 / 冷却 /
+     * 每日上限 / 预设）。为什么分两层：间隔与配额是「这台宿主一共开几个会话」的事，跨工作区
+     * 算才有意义；触发与冷却则是「这个仓库的活怎么派」的事。
+     *
+     * 面板刻意把**基线时刻**与**待投递**都显示出来：前者解释「为什么历史 issue 没被投递」，
+     * 后者解释「为什么它还没动」——这两处是最容易让人以为功能坏了的地方。
+     *
+     * @param props - `api` / `t` / `sessionId` / `binding` / `onChanged`。
+     */
+    function AutoAssignPanel({ api, t, sessionId, binding, onChanged }) {
+      const [state, setState] = React.useState(null)
+      const [error, setError] = React.useState(null)
+      const [busy, setBusy] = React.useState(false)
+      const [notice, setNotice] = React.useState(null)
+      const [draft, setDraft] = React.useState(null)
+
+      const load = React.useCallback(async () => {
+        const result = await api.autoGet()
+        if (!result.ok) {
+          setError(failureText(t, result))
+          return
+        }
+        setError(null)
+        setState(result.data)
+      }, [api, t])
+
+      React.useEffect(() => { void load() }, [load])
+
+      // 账本里的 per-root 配置：没配过就是 null，用宿主默认值填一份草稿。
+      // 账本缺 `roots` 也要能渲染（桥的字段集可能比界面新/旧），按「没配过」处理。
+      const root = binding?.root ?? null
+      const roots = state?.roots ?? {}
+      const saved = state !== null && root !== null ? (roots[root] ?? null) : null
+
+      React.useEffect(() => {
+        if (state === null || root === null) return
+        const config = saved
+        setDraft({
+          enabled: config?.enabled ?? true,
+          newAssigned: config?.triggers?.newAssigned ?? true,
+          reopened: config?.triggers?.reopened ?? true,
+          newComment: config?.triggers?.newComment ?? true,
+          cooldownSeconds: config?.cooldownSeconds ?? 600,
+          maxPerIssuePerDay: config?.maxPerIssuePerDay ?? 3,
+          giveUpAfterHours: config?.giveUpAfterHours ?? 24,
+          agentPreset: config?.agentPreset ?? '',
+        })
+      }, [state, root, binding?.effective?.repo])
+
+      if (error !== null) return h('div', { className: 'dsh-gti-scroll' }, h(Banner, { tone: 'error', text: error }))
+      if (state === null || draft === null) return h('div', { className: 'dsh-gti-scroll' }, h(Loading, { t }))
+
+      const effective = binding?.effective ?? null
+      if (effective === null) return h('div', { className: 'dsh-gti-scroll' }, h(Banner, { tone: 'warn', text: t('auto.needBinding') }))
+
+      const status = state.status
+      const pending = state.pending ?? []
+      const deliveries = [...(state.deliveries ?? [])].reverse()
+
+      const patchGlobal = async (patch) => {
+        setBusy(true)
+        setNotice(null)
+        const result = await api.autoSet({ global: patch, expectedRevision: state.revision })
+        setBusy(false)
+        if (!result.ok) {
+          setNotice({ tone: 'error', text: failureText(t, result) })
+          return
+        }
+        await load()
+        onChanged?.()
+      }
+
+      const saveRoot = async () => {
+        setBusy(true)
+        setNotice(null)
+        const result = await api.autoSet({
+          sessionId,
+          root,
+          rootConfig: {
+            enabled: draft.enabled,
+            triggers: {
+              newAssigned: draft.newAssigned,
+              reopened: draft.reopened,
+              newComment: draft.newComment,
+            },
+            cooldownSeconds: Number(draft.cooldownSeconds),
+            maxPerIssuePerDay: Number(draft.maxPerIssuePerDay),
+            giveUpAfterHours: Number(draft.giveUpAfterHours),
+            agentPreset: draft.agentPreset.trim() === '' ? null : draft.agentPreset.trim(),
+          },
+          expectedRevision: state.revision,
+        })
+        setBusy(false)
+        if (!result.ok) {
+          setNotice({ tone: 'error', text: failureText(t, result) })
+          return
+        }
+        setNotice({ tone: 'ok', text: t('auto.saved') })
+        await load()
+        onChanged?.()
+      }
+
+      const tick = async () => {
+        setBusy(true)
+        setNotice(null)
+        const result = await api.autoTick()
+        setBusy(false)
+        if (!result.ok) {
+          setNotice({ tone: 'error', text: failureText(t, result) })
+          return
+        }
+        const delivered = result.data?.summary?.delivered ?? 0
+        setNotice({ tone: 'ok', text: t('auto.tickDone', { n: delivered }) })
+        await load()
+      }
+
+      const replay = async (index) => {
+        setBusy(true)
+        const result = await api.autoRequeue({ sessionId, root, index, expectedRevision: state.revision })
+        setBusy(false)
+        if (!result.ok) {
+          setNotice({ tone: 'error', text: failureText(t, result) })
+          return
+        }
+        setNotice({ tone: 'ok', text: t('auto.saved') })
+        await load()
+      }
+
+      const number = (value, fallback) => {
+        const parsed = Number(value)
+        return Number.isFinite(parsed) ? parsed : fallback
+      }
+
+      return h('div', { className: 'dsh-gti-scroll', 'data-gti-watch': 'true' },
+        // ── 全局 ──
+        h('div', { className: 'dsh-gti-section-head' }, t('auto.master')),
+        status.serviceAvailable === false
+          ? h(Banner, { tone: 'warn', text: t('auto.state.unavailable') })
+          : null,
+        notice === null ? null : h(Banner, { tone: notice.tone, text: notice.text }),
+        h('div', { className: 'dsh-gti-form', style: { padding: '12px 0 0' } },
+          h('label', { className: 'dsh-gti-check' },
+            h('input', {
+              type: 'checkbox',
+              checked: state.global.enabled === true,
+              'data-gti-watch-master': 'true',
+              disabled: busy,
+              onChange: (event) => void patchGlobal({ enabled: event.target.checked }),
+            }),
+            h('span', null, t('auto.enable'))),
+          h('p', { className: 'dsh-gti-note' }, t('auto.enableHint')),
+          h('div', { className: 'dsh-gti-field' },
+            h('label', { className: 'dsh-gti-field-label' }, t('auto.interval')),
+            h('input', {
+              className: 'dsh-gti-input',
+              type: 'number',
+              min: 60,
+              value: state.global.intervalSeconds,
+              'data-gti-watch-interval': 'true',
+              disabled: busy,
+              onChange: (event) => void patchGlobal({ intervalSeconds: number(event.target.value, 120) }),
+            })),
+          h('div', { className: 'dsh-gti-field' },
+            h('label', { className: 'dsh-gti-field-label' }, t('auto.quota')),
+            h('input', {
+              className: 'dsh-gti-input',
+              type: 'number',
+              min: 1,
+              value: state.global.maxSessionsPerHour,
+              'data-gti-watch-quota': 'true',
+              disabled: busy,
+              onChange: (event) => void patchGlobal({ maxSessionsPerHour: number(event.target.value, 6) }),
+            })),
+          h('label', { className: 'dsh-gti-check' },
+            h('input', {
+              type: 'checkbox',
+              checked: state.global.dryRun === true,
+              'data-gti-watch-dryrun': 'true',
+              disabled: busy,
+              onChange: (event) => void patchGlobal({ dryRun: event.target.checked }),
+            }),
+            h('span', null, t('auto.dryRun')))),
+
+        // ── 本工作区 ──
+        h('div', { className: 'dsh-gti-section-head' }, t('auto.title')),
+        h('p', { className: 'dsh-gti-note dsh-gti-code' }, `${effective.owner}/${effective.repo}`),
+        h('div', { className: 'dsh-gti-form', style: { padding: '0' } },
+          h('label', { className: 'dsh-gti-check' },
+            h('input', {
+              type: 'checkbox',
+              checked: draft.enabled,
+              'data-gti-watch-enabled': 'true',
+              onChange: (event) => setDraft({ ...draft, enabled: event.target.checked }),
+            }),
+            h('span', null, t('auto.enable'))),
+          h('label', { className: 'dsh-gti-check' },
+            h('input', {
+              type: 'checkbox',
+              checked: draft.newAssigned,
+              'data-gti-watch-trigger-newassigned': 'true',
+              onChange: (event) => setDraft({ ...draft, newAssigned: event.target.checked }),
+            }),
+            h('span', null, t('auto.trigger.newAssigned'))),
+          h('label', { className: 'dsh-gti-check' },
+            h('input', {
+              type: 'checkbox',
+              checked: draft.reopened,
+              'data-gti-watch-trigger-reopened': 'true',
+              onChange: (event) => setDraft({ ...draft, reopened: event.target.checked }),
+            }),
+            h('span', null, t('auto.trigger.reopened'))),
+          h('label', { className: 'dsh-gti-check' },
+            h('input', {
+              type: 'checkbox',
+              checked: draft.newComment,
+              'data-gti-watch-trigger-newcomment': 'true',
+              onChange: (event) => setDraft({ ...draft, newComment: event.target.checked }),
+            }),
+            h('span', null, t('auto.trigger.newComment'))),
+          h('div', { className: 'dsh-gti-field' },
+            h('label', { className: 'dsh-gti-field-label' }, t('auto.cooldown')),
+            h('input', {
+              className: 'dsh-gti-input',
+              type: 'number',
+              min: 0,
+              value: draft.cooldownSeconds,
+              'data-gti-watch-cooldown': 'true',
+              onChange: (event) => setDraft({ ...draft, cooldownSeconds: number(event.target.value, 600) }),
+            })),
+          h('div', { className: 'dsh-gti-field' },
+            h('label', { className: 'dsh-gti-field-label' }, t('auto.daily')),
+            h('input', {
+              className: 'dsh-gti-input',
+              type: 'number',
+              min: 1,
+              value: draft.maxPerIssuePerDay,
+              'data-gti-watch-daily': 'true',
+              onChange: (event) => setDraft({ ...draft, maxPerIssuePerDay: number(event.target.value, 3) }),
+            })),
+          h('div', { className: 'dsh-gti-field' },
+            h('label', { className: 'dsh-gti-field-label' }, t('auto.giveUp')),
+            h('input', {
+              className: 'dsh-gti-input',
+              type: 'number',
+              min: 1,
+              value: draft.giveUpAfterHours,
+              'data-gti-watch-giveup': 'true',
+              onChange: (event) => setDraft({ ...draft, giveUpAfterHours: number(event.target.value, 24) }),
+            })),
+          h('div', { className: 'dsh-gti-field' },
+            h('label', { className: 'dsh-gti-field-label' }, t('auto.preset')),
+            h('input', {
+              className: 'dsh-gti-input',
+              placeholder: 'default',
+              value: draft.agentPreset,
+              'data-gti-watch-preset': 'true',
+              onChange: (event) => setDraft({ ...draft, agentPreset: event.target.value }),
+            })),
+          h('div', { className: 'dsh-gti-actions' },
+            h('button', {
+              type: 'button',
+              className: 'dsh-gti-button',
+              'data-primary': 'true',
+              disabled: busy,
+              'data-gti-watch-save': 'true',
+              onClick: () => void saveRoot(),
+            }, t('auto.save')),
+            h('button', {
+              type: 'button',
+              className: 'dsh-gti-button',
+              disabled: busy,
+              'data-gti-watch-tick': 'true',
+              onClick: () => void tick(),
+            }, busy ? t('auto.ticking') : t('auto.tick')))),
+
+        // ── 状态 ──
+        h('div', { className: 'dsh-gti-section-head' }, t('auto.state')),
+        h('ul', { className: 'dsh-gti-note', 'data-gti-watch-status': 'true' },
+          state.global.enabled ? h('li', null, t('auto.state.enabled')) : h('li', null, t('auto.state.disabled')),
+          h('li', null, `${t('auto.state.repo')}: ${effective.owner}/${effective.repo}`),
+          state.global.baselinedAt === null
+            ? null
+            : h('li', null, `${t('auto.state.baseline')}: ${state.global.baselinedAt}`),
+          h('li', null, `${t('auto.state.watermark')}: ${status.lastTickAt ?? '—'}`),
+          h('li', null, `${t('auto.state.next')}: ${status.nextTickAt ?? '—'}`),
+          saved === null
+            ? null
+            : h('li', null, `${t('auto.state.repo')}: ${saved.owner}/${saved.repo}`),
+          status.serviceAvailable === false ? h('li', { 'data-tone': 'warn' }, t('auto.state.unavailable')) : null,
+          status.locked === false ? h('li', { 'data-tone': 'warn' }, t('auto.state.locked')) : null,
+          status.lastError === null
+            ? null
+            : h('li', { 'data-tone': 'error' }, t('auto.error', { code: status.lastError.code, message: status.lastError.message }))),
+
+        // ── 待投递 ──
+        h('div', { className: 'dsh-gti-section-head' }, t('auto.pending')),
+        pending.length === 0
+          ? h('p', { className: 'dsh-gti-note', 'data-gti-watch-pending-empty': 'true' }, t('auto.pending.empty'))
+          : h('ul', { className: 'dsh-gti-note', 'data-gti-watch-pending': 'true' },
+            pending.map((item) => h('li', { key: item.key },
+              `#${item.key.slice(item.key.lastIndexOf('#') + 1)} ${item.title ?? ''} — `,
+              item.kinds.map((kind) => t(`auto.kind.${kind}`)).join(' / '),
+              item.since === null ? '' : `（${t('auto.pending.since', { at: item.since })}）`))),
+
+        // ── 最近投递 ──
+        h('div', { className: 'dsh-gti-section-head' }, t('auto.deliveries')),
+        deliveries.length === 0
+          ? h('p', { className: 'dsh-gti-note', 'data-gti-watch-deliveries-empty': 'true' }, t('auto.deliveries.empty'))
+          : h('ul', { className: 'dsh-gti-note', 'data-gti-watch-deliveries': 'true' },
+            deliveries.map((row, position) => h('li', { key: `${row.at}-${position}` },
+              `${row.at} · #${row.index ?? '?'} ${row.title ?? ''} — `,
+              t(`auto.outcome.${String(row.outcome).replace(/-/g, '-')}`) || row.outcome,
+              row.reason === undefined ? '' : ` (${row.reason})`,
+              row.outcome === 'failed' || row.outcome === 'busy-skipped'
+                ? h('button', {
+                  type: 'button',
+                  className: 'dsh-gti-button',
+                  title: t('auto.replayHint'),
+                  disabled: busy,
+                  'data-gti-watch-replay': String(row.index ?? ''),
+                  onClick: () => void replay(Number(row.index)),
+                }, t('auto.replay'))
+                : null))))
     }
 
     // ── 新建 / 编辑 issue 的整屏视图（全局看板与工作区看板共用） ──────────────
@@ -2317,6 +2752,21 @@ window.__ModuleLoader__.load({
             error: bindingError,
             reload: loadBinding,
             onChanged: () => { void reloadConfig(); void load() },
+            onOpenAuto: () => setView({ kind: 'auto' }),
+          }))
+      }
+
+      if (view.kind === 'auto') {
+        return h('div', { className: 'dsh-gti-root', 'data-gti-workspace': 'true' },
+          h('style', null, CSS),
+          h('div', { className: 'dsh-gti-bar' },
+            h('button', { type: 'button', className: 'dsh-gti-icon-button', title: t('common.back'), onClick: () => setView({ kind: 'binding' }) }, h(Icon, { name: 'back' })),
+            h('span', { className: 'dsh-gti-bar-title' }, t('auto.title'))),
+          h(AutoAssignPanel, {
+            api,
+            t,
+            sessionId,
+            binding,
           }))
       }
 

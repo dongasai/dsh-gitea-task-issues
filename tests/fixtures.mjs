@@ -74,6 +74,40 @@ export const FIXTURES = {
   },
   repos: [{ serverId: 'srv-a', owner: 'dongasai', repo: 'mylike', fullName: 'dongasai/mylike', private: false, hasIssues: true, htmlUrl: null, updatedAt: null, defaultBranch: 'main' }],
   probe: { ok: true, authenticated: true, version: '1.27.3', user: { login: 'tester', name: 'Tester', avatarUrl: null }, tokenSource: 'record' },
+  // 自动分配的账本快照：一条待投递 + 一条已投递，够渲染出两个列表。
+  watch: {
+    revision: 3,
+    global: { enabled: true, intervalSeconds: 120, maxSessionsPerHour: 6, dryRun: false, baselinedAt: '2026-10-16T00:00:00.000Z' },
+    roots: {
+      '/work/mylike': {
+        enabled: true,
+        serverId: 'srv-a',
+        owner: 'dongasai',
+        repo: 'mylike',
+        triggers: { newAssigned: true, reopened: true, newComment: false },
+        agentPreset: null,
+        cooldownSeconds: 600,
+        maxPerIssuePerDay: 3,
+        giveUpAfterHours: 24,
+      },
+    },
+    watermarks: { 'srv-a/dongasai/mylike': { issues: '2026-10-16T12:00:00.000Z', comments: '2026-10-16T12:00:00.000Z' } },
+    pending: [{ key: 'srv-a/dongasai/mylike#9', title: '待办标题', kinds: ['newComment'], actor: 'alice', since: '2026-10-16T12:00:00.000Z' }],
+    deliveries: [{ at: '2026-10-16T12:00:00.000Z', key: 'srv-a/dongasai/mylike#2', root: '/work/mylike', index: 2, title: '列表标题二', kinds: ['newAssigned'], outcome: 'prompted', sessionId: 'session-x' }],
+    status: {
+      running: false,
+      locked: true,
+      serviceAvailable: true,
+      lastTickAt: '2026-10-16T12:00:00.000Z',
+      lastReason: 'timer',
+      lastError: null,
+      consecutiveFailures: 0,
+      nextTickAt: '2026-10-16T12:02:00.000Z',
+      summary: null,
+      lockFile: '/tmp/lock',
+    },
+    storage: '/tmp/watch.json',
+  },
 }
 
 /**
@@ -94,6 +128,10 @@ export function bridgeAnswer(op, params) {
     return { ok: true, data: { server: FIXTURES.config.servers[0], revision: 4 } }
   }
   if (op === 'config.server.remove' || op === 'binding.set' || op === 'binding.remove') return { ok: true, data: { revision: 4 } }
+  if (op === 'watch.get') return { ok: true, data: FIXTURES.watch }
+  if (op === 'watch.set') return { ok: true, data: { revision: 4, global: FIXTURES.watch.global, roots: FIXTURES.watch.roots } }
+  if (op === 'watch.tick') return { ok: true, data: { summary: { delivered: 1 }, status: FIXTURES.watch.status } }
+  if (op === 'watch.requeue') return { ok: true, data: { root: params?.root, index: params?.index, revision: 5 } }
   if (op === 'gitea.call') {
     const inner = params?.op
     if (inner === 'issue.list' || inner === 'issue.search') return { ok: true, data: FIXTURES.issues, total: 2 }

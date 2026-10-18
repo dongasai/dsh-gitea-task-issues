@@ -721,3 +721,101 @@ function assertNoUndefined(value, label, path = '') {
   }
   for (const [key, item] of Object.entries(value)) assertNoUndefined(item, label, `${path}.${key}`)
 }
+
+// ── 自动分配（watch）的桥操作 ────────────────────────────────────────────────
+
+test('watch.get：空白账本、总闸关着、状态可读', async () => {
+  const data = await ok('watch.get')
+  assert.equal(data.global.enabled, false, '总闸默认关')
+  assert.ok(data.global.intervalSeconds >= 60, '间隔有下限')
+  assert.deepEqual(data.roots, {})
+  assert.deepEqual(data.pending, [])
+  assert.deepEqual(data.deliveries, [])
+  assert.equal(typeof data.status.serviceAvailable, 'boolean')
+  assert.match(data.storage, /watch\.json$/)
+})
+
+test('watch.set：只接受 global / root + rootConfig，且仓库由绑定解析（不可指定）', async () => {
+  // 自给自足：建一台服务器 + 一条绑定，watch.set 才解析得出仓库。
+  const added = await ok('config.server.add', { name: '自动分配用', baseUrl: world.gitea.url, token: 'token-auto' })
+  world.autoServerId = added.server.id
+  await ok('binding.set', { root: world.workspace, serverId: added.server.id, owner: 'dongasai', repo: 'mylike' })
+
+  const set = await ok('watch.set', {
+    root: world.workspace,
+    rootConfig: { enabled: true, triggers: { newComment: false }, cooldownSeconds: 120 },
+  })
+  assert.equal(set.roots[world.workspace].enabled, true)
+  assert.equal(set.roots[world.workspace].triggers.newComment, false)
+  assert.equal(set.roots[world.workspace].triggers.newAssigned, true, '没给的开关保持默认')
+  assert.equal(set.roots[world.workspace].cooldownSeconds, 120)
+  // 仓库来自绑定，不是调用方给的。
+  assert.equal(set.roots[world.workspace].repo, 'mylike')
+
+  // global 局部更新
+  const globalNext = await ok('watch.set', { global: { intervalSeconds: 300, maxSessionsPerHour: 3 } })
+  assert.equal(globalNext.global.intervalSeconds, 300)
+  assert.equal(globalNext.global.maxSessionsPerHour, 3)
+  assert.equal(globalNext.global.enabled, false, '没碰的字段保持不变')
+})
+
+test('watch.set：参数越界一律 400，不把脏配置写进去', async () => {
+  for (const bad of [
+    { global: { intervalSeconds: 10 } },
+    { global: { maxSessionsPerHour: 0 } },
+    { global: { enabled: 'yes' } },
+    { root: world.workspace, rootConfig: { cooldownSeconds: -1 } },
+    { root: world.workspace, rootConfig: { triggers: { newAssigned: 'x' } } },
+    {},
+  ]) {
+    const { status, body } = await call('watch.set', bad)
+    assert.equal(status, 400, `${JSON.stringify(bad)} 应当被拒：${JSON.stringify(body)}`)
+  }
+})
+
+test('watch.set：rootConfig 为 null 表示删掉该工作区的配置', async () => {
+  await ok('watch.set', { root: world.workspace, rootConfig: { enabled: true } })
+  const removed = await ok('watch.set', { root: world.workspace, rootConfig: null })
+  assert.equal(removed.roots[world.workspace], undefined)
+})
+
+test('watch.tick：手动跑一轮返回摘要（总闸关着就是 stopped）', async () => {
+  const data = await ok('watch.tick')
+  assert.deepEqual(data.summary, { stopped: 'disabled' })
+  assert.ok(data.status !== undefined)
+})
+
+test('watch.requeue：没配置的工作区 / 没见过的 issue 都要明确报错', async () => {
+  const noRoot = await call('watch.requeue', { root: world.workspace, index: 1 })
+  assert.equal(noRoot.status, 404)
+  assert.equal(noRoot.body.code, 'watch-root-unknown')
+
+  await ok('watch.set', { root: world.workspace, rootConfig: { enabled: true } })
+  const noIssue = await call('watch.requeue', { root: world.workspace, index: 999 })
+  assert.equal(noIssue.status, 404)
+  assert.equal(noIssue.body.code, 'watch-issue-unknown')
+})
+
+test('watch 的四个操作可用，且不接受 serverId/owner/repo 指定仓库', async () => {
+  // 注意：`gitea.ops` 列的是**上游 Gitea 端点**，桥自己的操作（含 watch.*）本来就不在里面，
+  // 所以这里逐个真调一遍，而不是去清单里找名字。
+  for (const [op, params] of [
+    ['watch.get', {}],
+    ['watch.tick', {}],
+  ]) {
+    const { status } = await call(op, params)
+    assert.equal(status, 200, `${op} 应当可用`)
+  }
+  // watch.set 里塞 repo 不会改变解析结果（它只认绑定）。
+  const added = await ok('config.server.add', { name: '自动分配用2', baseUrl: world.gitea.url, token: 'token-auto2' })
+  await ok('binding.set', { root: world.workspace, serverId: added.server.id, owner: 'dongasai', repo: 'mylike' })
+  const changed = await ok('watch.set', {
+    root: world.workspace,
+    rootConfig: { enabled: true },
+    serverId: 'srv-hacked',
+    owner: 'evil',
+    repo: 'evil',
+  })
+  assert.equal(changed.roots[world.workspace].owner, 'dongasai')
+  assert.equal(changed.roots[world.workspace].repo, 'mylike')
+})
