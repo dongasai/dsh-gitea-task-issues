@@ -4,8 +4,8 @@
  * **Gitea 任务 issues —— 浏览器半边**。给 GUI 补两处看板 + 一处管理面：
  *
  * 1. **全局看板**（`main` 键 `gitea-issues`，入口是左侧栏 `sidebar.panellist` 的一个图标，
- *    `order: 20` —— 排在官方「自动化任务」（order 10）下面）：跨服务器 / 跨仓库的 issues 视图，
- *    外加服务器管理与令牌管理；
+ *    `order: 20` —— 排在官方「自动化任务」（order 10）下面）：把**所有已绑定的工作区仓库**
+ *    的 issues 聚到一屏（范围由绑定决定，不是令牌能看见的全部仓库），外加服务器管理与令牌管理；
  * 2. **工作区看板**（右侧栏页签类型 `gitea-issues`）：看当前工作区绑定仓库的 issues，
  *    列表 → 详情 → 编辑 / 评论 / 附件 / 指派 / 依赖 / 订阅 / Pin / Label / Lock / 工时；
  * 3. **绑定设置**：手动绑定压过自动侦测（读 `.git/config` 的 remote 得到 host/owner/repo，
@@ -116,14 +116,17 @@ window.__ModuleLoader__.load({
       'filter.ownerPlaceholder': '按 owner 收窄（可选）',
       'filter.server': '服务器',
       'filter.allServers': '全部服务器',
-      'filter.scope': '范围',
-      'filter.scopeAll': '跨仓库',
+      // 范围说明：全局看板只聚合「工作区绑定过的仓库」，不是这台 Gitea 上你能看见的全部仓库。
+      'filter.boundScope': '范围：{n} 个已绑定的工作区仓库',
 
       'list.count': '{n} 条',
       'list.empty': '这个筛选下没有 issue。',
       'list.emptyHint': '换个状态或关键词试试，或者新建一条。',
+      'list.emptyTargetsHint': '这个筛选下没有已绑定的仓库：清空服务器 / 所属筛选再试。',
+      'list.noBindings': '还没有绑定任何工作区仓库。',
+      'list.noBindingsHint': '去右侧栏「Gitea issues」看板的「绑定设置」给工作区绑一个仓库，这里就会列出它们的 issues。',
       'list.loading': '正在读取 issues…',
-      'list.partial': '部分服务器读取失败：{names}',
+      'list.partial': '部分仓库读取失败：{names}',
 
       'view.mode': '视图模式',
       'view.lanes': '泳道',
@@ -357,14 +360,16 @@ window.__ModuleLoader__.load({
       'filter.ownerPlaceholder': 'Narrow by owner (optional)',
       'filter.server': 'Server',
       'filter.allServers': 'All servers',
-      'filter.scope': 'Scope',
-      'filter.scopeAll': 'Across repositories',
+      'filter.boundScope': 'Scope: {n} repositories bound to a workspace',
 
       'list.count': '{n} items',
       'list.empty': 'No issues match this filter.',
       'list.emptyHint': 'Try another state or keyword, or file a new one.',
+      'list.emptyTargetsHint': 'No bound repository matches this filter: clear the server / owner filter and try again.',
+      'list.noBindings': 'No workspace repository is bound yet.',
+      'list.noBindingsHint': 'Bind a repository in the workspace board (right sidebar) under "binding settings", and its issues will show up here.',
       'list.loading': 'Loading issues…',
-      'list.partial': 'Some servers failed: {names}',
+      'list.partial': 'Some repositories failed: {names}',
 
       'view.mode': 'View mode',
       'view.lanes': 'Swimlanes',
@@ -567,6 +572,8 @@ window.__ModuleLoader__.load({
 .dsh-gti-root{display:flex;flex-direction:column;flex:auto;height:100%;min-height:0;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-size:var(--dsh-content-font-size-secondary,13px);line-height:1.5}
 .dsh-gti-bar{flex:none;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 12px;border-bottom:.5px solid var(--dsw-alias-border-l1)}
 .dsh-gti-bar-title{font-weight:600;font-size:13px}
+/* 全局看板的「范围」说明条：单独一行、和筛选条同一种内缩，不像报错横幅那样抢眼。 */
+.dsh-gti-scope{display:block;padding:6px 12px;border-bottom:.5px solid var(--dsw-alias-border-l1)}
 .dsh-gti-spacer{flex:1 1 auto}
 .dsh-gti-input,.dsh-gti-select,.dsh-gti-textarea{font:inherit;font-size:12px;box-sizing:border-box;padding:4px 8px;border-radius:var(--dsw-radius-sm,6px);border:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);min-width:0}
 .dsh-gti-textarea{width:100%;min-height:96px;resize:vertical;line-height:1.6;font-family:inherit}
@@ -2525,6 +2532,37 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 全局看板这一屏该查哪些仓库：**所有已绑定的工作区仓库**，去重后按筛选条收窄。
+     *
+     * 为什么不沿用服务器级跨仓库搜索（`/repos/issues/search`）：那个端点只能按 `owner` 收窄，
+     * **收不到单个仓库**，于是「这台 Gitea 上令牌能看见的仓库」全会被拉进来 —— 包括没有任何
+     * 工作区绑定过的仓库，看上去像「所有 issues」。范围必须由**绑定**决定：一个绑定就是一条
+     * 「这个仓库跟我有关」的声明。改成一个绑定一次仓库级查询，还顺带避开了「每台服务器只取
+     * 50 条、被无关仓库挤掉」的问题。
+     *
+     * 去重按 `服务器 + owner + repo`（不区分大小写）：两个工作区绑同一个仓库是常见情况
+     * （主仓 + 拆分出来的子仓目录），查两遍会出现重复行。
+     *
+     * @param config - `config.get` 的应答（可能为 null）。
+     * @param query - 筛选里的 `{ serverId, owner }`（空串表示不收窄）。
+     * @returns `[{ serverId, owner, repo, roots }]`，`roots` 是绑到该仓库的工作区根。
+     */
+    function boardTargets(config, query) {
+      const seen = new Set()
+      const targets = []
+      for (const item of bindingOptions(config)) {
+        if (query.serverId !== '' && item.serverId !== query.serverId) continue
+        // owner 在 Gitea 里不区分大小写，筛选也跟着不区分（否则输错个大小写就整屏空）。
+        if (query.owner !== '' && item.owner.toLowerCase() !== query.owner.trim().toLowerCase()) continue
+        const key = `${item.serverId}\n${item.owner.toLowerCase()}\n${item.repo.toLowerCase()}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        targets.push({ serverId: item.serverId, owner: item.owner, repo: item.repo, roots: [item.root] })
+      }
+      return targets
+    }
+
+    /**
      * 服务器 id → 显示名（找不到就回 id，别渲染出 `undefined`）。
      * @param config - `config.get` 的应答。
      * @param serverId - 服务器 id。
@@ -2587,7 +2625,10 @@ window.__ModuleLoader__.load({
     // ── 全局看板 ────────────────────────────────────────────────────────────
 
     /**
-     * 全局看板：跨服务器（可选跨仓库）的 issues，外加服务器管理与令牌管理。
+     * 全局看板：**所有已绑定的工作区仓库**的 issues 聚到一屏，外加服务器管理与令牌管理。
+     *
+     * 范围由绑定决定 —— 「这台 Gitea 上令牌能看见的全部 issue」包括了没绑过工作区的仓库，
+     * 那是别人（或只是路过）的仓库，不该出现在「我的看板」里。取数与去重见 `boardTargets`。
      * @param props - `api` / `t`。
      */
     function GlobalBoard({ api, t }) {
@@ -2610,35 +2651,55 @@ window.__ModuleLoader__.load({
       const stateLocked = mode === 'lanes' && group === 'state'
       const query = { ...filter, state: stateLocked ? 'all' : filter.state, q: debouncedKeyword }
 
+      /** 这一屏要查的仓库：只来自已绑定的工作区（`boardTargets` 里有「为什么不跨仓库搜索」）。 */
+      const targets = React.useMemo(
+        () => boardTargets(config, { serverId: filter.serverId, owner: filter.owner }),
+        [config, filter.serverId, filter.owner],
+      )
+      const hasBindings = React.useMemo(() => bindingOptions(config).length > 0, [config])
+
       const load = React.useCallback(async () => {
         if (config === null) return
-        const servers = query.serverId === '' ? config.servers : config.servers.filter((server) => server.id === query.serverId)
-        if (servers.length === 0) {
+        if (targets.length === 0) {
           setIssues([])
           setFailed([])
           return
         }
         setError(null)
-        const results = await Promise.all(servers.map(async (server) => ({
-          server,
-          result: await api.gitea('issue.search', {
-            serverId: server.id,
+        const results = await Promise.all(targets.map(async (target) => ({
+          target,
+          result: await api.gitea('issue.list', {
+            serverId: target.serverId,
+            owner: target.owner,
+            repo: target.repo,
             state: query.state,
             q: query.q === '' ? undefined : query.q,
-            owner: query.owner === '' ? undefined : query.owner,
             limit: 50,
           }),
         })))
         const merged = []
         const broken = []
-        for (const { server, result } of results) {
-          if (result.ok) merged.push(...(result.data ?? []).map((issue) => ({ ...issue, serverId: server.id })))
-          else broken.push(`${server.name}（${failureText(t, result)}）`)
+        const seen = new Set()
+        for (const { target, result } of results) {
+          if (!result.ok) {
+            // 横幅点名到「服务器 + owner/repo」：只写服务器的话，多仓库时看不出是哪个失败的。
+            broken.push(`${serverName(config, target.serverId)} ${target.owner}/${target.repo}（${failureText(t, result)}）`)
+            continue
+          }
+          for (const issue of result.data ?? []) {
+            const owner = String(issue.owner ?? target.owner).toLowerCase()
+            const repo = String(issue.repo ?? target.repo).toLowerCase()
+            const key = `${issue.serverId ?? target.serverId}\n${owner}\n${repo}\n${issue.index}`
+            // 兜底去重：同一条 issue 被两条绑定查回来时只留一行（泳道是视角，不是归属）。
+            if (seen.has(key)) continue
+            seen.add(key)
+            merged.push({ ...issue, serverId: issue.serverId ?? target.serverId })
+          }
         }
         merged.sort((left, right) => String(right.updatedAt ?? '').localeCompare(String(left.updatedAt ?? '')))
         setIssues(merged)
         setFailed(broken)
-      }, [api, config, query.serverId, query.state, query.q, query.owner, t])
+      }, [api, config, targets, query.state, query.q, t])
 
       React.useEffect(() => { void load() }, [load])
 
@@ -2666,7 +2727,9 @@ window.__ModuleLoader__.load({
             type: 'button',
             className: 'dsh-gti-icon-button',
             title: t('common.refresh'),
-            onClick: () => void load(),
+            // 先重读配置：范围由绑定决定，别处刚绑好的工作区要能靠这个按钮出现在这一屏
+            // （配置换了 → `targets` / `load` 跟着换 → 下面的 effect 自动取数）。
+            onClick: () => void reloadConfig(),
           }, h(Icon, { name: 'refresh' }))),
         h(FilterBar, {
           value: { ...filter, state: query.state, q: keyword },
@@ -2681,13 +2744,22 @@ window.__ModuleLoader__.load({
           stateLocked,
           t,
         }, h(ViewControls, { mode, group, onMode: setMode, onGroup: setGroup, t })),
+        // 范围写明白：这一屏的是「已绑定的工作区仓库」，不是这台 Gitea 上令牌能看见的全部仓库。
+        hasBindings
+          ? h('div', { className: 'dsh-gti-note dsh-gti-scope', 'data-gti-scope': 'bound' }, t('filter.boundScope', { n: targets.length }))
+          : null,
         configError === null ? null : h(Banner, { tone: 'error', text: configError }),
         failed.length > 0 ? h(Banner, { tone: 'warn', text: t('list.partial', { names: failed.join('；') }) }) : null,
         error === null ? null : h(Banner, { tone: 'error', text: error }),
         issues === null
           ? h(Loading, { t })
           : issues.length === 0
-            ? h(Empty, { title: t('list.empty'), hint: t('list.emptyHint') })
+            ? h(Empty, {
+              title: hasBindings ? t('list.empty') : t('list.noBindings'),
+              hint: !hasBindings
+                ? t('list.noBindingsHint')
+                : (targets.length === 0 ? t('list.emptyTargetsHint') : t('list.emptyHint')),
+            })
             : h(IssueList, {
               issues,
               mode,

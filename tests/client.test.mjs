@@ -137,7 +137,8 @@ test('全局看板：渲染出服务器、issue 列表与详情，交互可达',
   assert.match(text, /第一个 issue/)
   assert.match(text, /第二个 issue/)
   assert.ok(calls.some((call) => call.op === 'config.get'))
-  assert.ok(calls.some((call) => call.op === 'gitea.call' && call.params.op === 'issue.search'))
+  assert.ok(calls.some((call) => call.op === 'gitea.call' && call.params.op === 'issue.list' &&
+    call.params.params.owner === 'dongasai' && call.params.params.repo === 'mylike'))
 
   // 点第一行 → 进详情（详情走 issue.detail 一揽子）。
   const row = findNode(mini, (node) => typeof node.props?.['data-gti-issue'] === 'string')
@@ -303,6 +304,103 @@ test('全局看板：服务器管理页渲染并探活', async () => {
   assert.match(text, /tester/)
 })
 
+test('全局看板：只查已绑定的工作区仓库，不再用服务器级跨仓库搜索', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+
+  calls.length = 0
+  const text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.deepEqual(mini.errors, [])
+
+  // 范围 = fixture 里的两个绑定仓库，一个不多一个不少。
+  const queried = calls
+    .filter((call) => call.op === 'gitea.call' && call.params.op === 'issue.list')
+    .map((call) => `${call.params.params.serverId} ${call.params.params.owner}/${call.params.params.repo}`)
+    .sort()
+  assert.deepEqual(queried, ['srv-a dongasai/mylike', 'srv-a dongasai/other'],
+    `全局看板查了绑定之外的仓库：${JSON.stringify(queried)}`)
+  // 这是本次修复的核心：`/repos/issues/search` 只能按 owner 收窄，会把「令牌看得见的全部仓库」
+  // 拉进来（包括没有任何工作区绑定的），看上去就是「所有 issues」。
+  assert.equal(calls.some((call) => call.op === 'gitea.call' && call.params.op === 'issue.search'), false,
+    '全局看板不该再发跨仓库搜索')
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-scope'] === 'bound')?.props.children,
+    '范围：2 个已绑定的工作区仓库')
+  assert.match(text, /范围：2 个已绑定的工作区仓库/)
+})
+
+test('全局看板：两个工作区绑同一仓库只查一次，同一条 issue 只出现一行', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+  const saved = FIXTURES.config.bindings
+  try {
+    FIXTURES.config.bindings = {
+      // 同一个仓库绑了两个工作区，而且大小写不统一 —— 都算同一个仓库。
+      '/work/a': { serverId: 'srv-a', owner: 'dongasai', repo: 'mylike', updatedAt: '2026-10-16T02:49:15.723Z' },
+      '/work/b': { serverId: 'srv-a', owner: 'Dongasai', repo: 'MyLike', updatedAt: '2026-10-16T02:50:00.000Z' },
+      '/work/c': { serverId: 'srv-a', owner: 'dongasai', repo: 'other', updatedAt: '2026-10-16T02:51:34.370Z' },
+    }
+    calls.length = 0
+    const text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+    assert.deepEqual(mini.errors, [])
+
+    const queried = calls
+      .filter((call) => call.op === 'gitea.call' && call.params.op === 'issue.list')
+      .map((call) => `${call.params.params.owner}/${call.params.params.repo}`.toLowerCase())
+    assert.deepEqual(queried.sort(), ['dongasai/mylike', 'dongasai/other'],
+      `同一仓库绑两次只该查一次：${JSON.stringify(queried)}`)
+    // 假桥对每个目标都返回同一批 issue；合并时按「服务器 + owner/repo + 编号」兜底去重。
+    assert.equal(text.split('第一个 issue').length - 1, 1, '同一条 issue 不能重复出现在列表里')
+  } finally {
+    FIXTURES.config.bindings = saved
+  }
+})
+
+test('全局看板：所属筛选收窄绑定仓库；没有匹配的绑定就不发取数请求', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+  const ownerInput = () => findNode(mini, (node) => node.props?.['data-gti-filter-owner'] === 'true')
+
+  let text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.deepEqual(mini.errors, [])
+  assert.ok(ownerInput(), '全局看板应有「所属」筛选')
+
+  calls.length = 0
+  ownerInput().props.onChange({ target: { value: 'nobody' } })
+  text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.deepEqual(mini.errors, [])
+  assert.equal(calls.filter((call) => call.params?.op === 'issue.list').length, 0,
+    '筛选不到任何绑定仓库时不该发请求（更不该退回跨仓库搜索）')
+  assert.match(text, /没有已绑定的仓库/)
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-scope'] === 'bound')?.props.children,
+    '范围：0 个已绑定的工作区仓库')
+
+  // owner 在 Gitea 里不区分大小写，筛选同样不区分。
+  calls.length = 0
+  ownerInput().props.onChange({ target: { value: 'DONGASAI' } })
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.equal(calls.filter((call) => call.params?.op === 'issue.list').length, 2,
+    'owner 匹配（大小写不同）时应照常查两个绑定仓库')
+})
+
+test('全局看板：一个绑定都没有时不发取数请求，给出绑定引导', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+  const saved = FIXTURES.config.bindings
+  try {
+    FIXTURES.config.bindings = {}
+    calls.length = 0
+    const text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+    assert.deepEqual(mini.errors, [])
+    assert.equal(calls.some((call) => call.params?.op === 'issue.list'), false, '没有绑定就没有仓库可查')
+    assert.match(text, /还没有绑定任何工作区仓库/)
+    assert.match(text, /绑定设置/)
+    assert.equal(findNode(mini, (node) => node.props?.['data-gti-scope'] === 'bound'), undefined,
+      '没有绑定时不显示范围条数')
+  } finally {
+    FIXTURES.config.bindings = saved
+  }
+})
+
 test('工作区看板：无绑定 / 有绑定 / 进详情 / 进绑定设置', async () => {
   const { fake, mini } = await newWorld()
   const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
@@ -386,7 +484,7 @@ test('泳道模式：默认泳道 + 按状态分组，状态筛选被接管；�
   assert.equal(findNode(mini, (node) => node.props?.['data-gti-board'] !== undefined).props['data-gti-board'], 'state',
     '看板要带上当前分组维度（锚点，同时说明列是横着铺的）')
   // 按状态分泳道时取数固定「全部」，否则「已关闭」那条泳道永远不会出现（fixtures 一 open 一 closed）。
-  assert.ok(calls.some((call) => call.op === 'gitea.call' && call.params.op === 'issue.search' && call.params.params.state === 'all'),
+  assert.ok(calls.some((call) => call.op === 'gitea.call' && call.params.op === 'issue.list' && call.params.params.state === 'all'),
     `按状态分泳道应先取全部状态：${JSON.stringify(calls)}`)
   assert.deepEqual(laneKeys(mini), ['state:open', 'state:closed'])
   assert.match(text, /第一个 issue/)

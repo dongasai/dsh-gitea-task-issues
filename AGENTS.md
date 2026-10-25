@@ -18,7 +18,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（96 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（100 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -44,7 +44,7 @@
 | [lib/triggers.js](lib/triggers.js) | **纯函数**：账本 + issues + 评论 → 触发（矩阵的主战场） |
 | [lib/watchstore.js](lib/watchstore.js) | 自动分配账本 `watch.json`：schema、收敛、剪枝 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 96 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 100 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 | [docs/auto-assign-design.md](docs/auto-assign-design.md) | 自动分配的设计稿：口径、账本、幂等闸门、边界 |
@@ -118,6 +118,12 @@
     **不扫盘、不预读自动侦测**（`bindingOptions` 只收能对得上已配置服务器的绑定）；② 多个绑定时
     **拿不准就不预选**（猜错仓库 = issue 落到别处，比多点一下贵得多）；③ 筛选条只是列表的收窄
     条件，不能反过来当成新建目标。手填 `owner/name` 那档叫「手动指定仓库」，是兜底、不是默认。
+22. **全局看板的展示范围由「工作区绑定」决定**（`boardTargets`）：一个绑定一次**仓库级**查询
+    （`issue.list` 显式带 `serverId/owner/repo`），**不要**把它改回服务器级跨仓库搜索
+    （`/repos/issues/search` 只能按 `owner` 收窄，会把令牌看得见、但没被任何工作区绑定的仓库也
+    拉进来 —— 旧版本「显示所有 issues」就是这么来的）。同一个仓库被多个工作区绑定时按
+    `serverId + owner + repo`（不区分大小写）去重，合并结果再按 `serverId/owner/repo/编号` 兜底
+    去重；筛选到零个绑定仓库时**不发请求**，只说明是筛选把范围收空了。
 
 ## 代码风格
 
@@ -164,6 +170,9 @@ node --check index.js && node --check client.js
 - **动全局看板的「新建 issue」**（目标来源、默认预选、两档切换）→ 同步 README 的「界面长什么样 ·
   全局看板」、「只能在浏览器里看的」第 13 条与 [IMPLEMENTATION.md](IMPLEMENTATION.md) 的
   「全局看板新建 issue：为什么目标是工作区」一节；`tests/client.test.mjs` 里那五条用例跟着改。
+- **动全局看板的「列表范围」**（取哪些仓库、去重口径、范围提示）→ 同步 README 的
+  「界面长什么样 · 全局看板」、「只能在浏览器里看的」第 13 条与 [IMPLEMENTATION.md](IMPLEMENTATION.md)
+  的「全局看板列表：范围由绑定决定」一节；`tests/client.test.mjs` 里那四条范围用例跟着改。
 - **动「发送到 DSH」**（提示词格式、入口位置、失败横幅）→ 同步 README 的「界面长什么样」、
   「只能在浏览器里看的」第 15 条与「已知边界」，以及 [IMPLEMENTATION.md](IMPLEMENTATION.md)
   的「发送到 DSH」一节；`tests/client.test.mjs` 里那四条用例跟着改。
