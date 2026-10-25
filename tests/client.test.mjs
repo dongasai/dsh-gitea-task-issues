@@ -453,15 +453,15 @@ test('工作区看板：自动投递开着时标题栏有徽标，点按直接�
   const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
 
   calls.length = 0
-  await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+  const text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
   assert.deepEqual(mini.errors, [])
 
   const badge = findNode(mini, (node) => typeof node.props?.['data-gti-auto-badge'] === 'string')
   assert.ok(badge, '开启自动投递时标题栏必须有可见徽标（用户 2026-10-25 反馈的正是这个缺口）')
   assert.equal(badge.props['data-gti-auto-badge'], 'on')
-  assert.match(badge.props.children, /自动投递已开/)
+  assert.match(text, /自动投递已开/)
   // fixtures 的 pending 里 #9 属于 srv-a/dongasai/mylike —— 徽标按「当前仓库」算待投递条数。
-  assert.match(badge.props.children, /待投递 1/)
+  assert.match(text, /待投递 1/)
   assert.match(badge.props.title, /下次检查/, '悬停要能看出轮询还在跑（带下次检查时刻）')
   assert.ok(calls.some((call) => call.op === 'watch.get'), '徽标要自己读账本，不能等配置页来喂')
 
@@ -487,9 +487,9 @@ test('工作区看板：演练模式 / 仓库变更 / 宿主无会话服务各�
   try {
     // 演练：看起来开着，其实只记账 —— 必须区别于「已开」，否则用户以为会话会被拉起来。
     FIXTURES.watch.global = { ...savedGlobal, dryRun: true }
-    await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    const dryText = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
     assert.equal(kindOf(), 'dry')
-    assert.match(findNode(mini, (node) => node.props?.['data-gti-auto-badge'] === 'dry').props.children, /演练/)
+    assert.match(dryText, /自动投递·演练/)
 
     // 绑定换过仓库：轮询器会跳过这个工作区，徽标不能还说「已开」。
     FIXTURES.watch.global = { ...savedGlobal }
@@ -534,6 +534,67 @@ test('工作区看板：总开关关着 / 这个工作区没配自动分配时�
   }
 })
 
+
+test('工作区看板：徽标里的下次检查倒计时按 mm:ss 走', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const savedStatus = FIXTURES.watch.status
+  try {
+    FIXTURES.watch.status = { ...savedStatus, nextTickAt: new Date(Date.now() + 125_000).toISOString() }
+    const text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    assert.deepEqual(mini.errors, [])
+    assert.ok(findNode(mini, (node) => node.props?.['data-gti-auto-countdown'] === 'true'),
+      '徽标里要有倒计时锚点')
+    // 125 秒 → 02:05（留一点执行耗时的宽容）。
+    assert.match(text, /02:0[4-5] 后检查/)
+    // 等一秒多再看：倒计时要真的在走，而不是渲染一次就定死。
+    await new Promise((resolve) => setTimeout(resolve, 1100))
+    const later = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    assert.match(later, /02:0[2-4] 后检查/, '倒计时要按秒递减')
+  } finally {
+    FIXTURES.watch.status = savedStatus
+  }
+})
+
+test('工作区看板：倒计时到点显示「即将检查」并重读账本', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const savedStatus = FIXTURES.watch.status
+  try {
+    FIXTURES.watch.status = { ...savedStatus, nextTickAt: new Date(Date.now() - 5_000).toISOString() }
+    calls.length = 0
+    const text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    assert.deepEqual(mini.errors, [])
+    assert.match(text, /即将检查/)
+    // 到点后要重新读一次账本拿新的 nextTickAt，否则倒计时会永远停在「即将检查」。
+    assert.ok(calls.filter((call) => call.op === 'watch.get').length >= 2,
+      `到点后应重读账本：${JSON.stringify(calls.map((call) => call.op))}`)
+  } finally {
+    FIXTURES.watch.status = savedStatus
+  }
+})
+
+test('工作区看板：退避中徽标写出失败次数，悬停带上次错误', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const savedStatus = FIXTURES.watch.status
+  try {
+    FIXTURES.watch.status = {
+      ...savedStatus,
+      consecutiveFailures: 3,
+      lastError: { code: 'token-missing', message: 'server "x" has no token', at: '2026-10-25T09:00:00.000Z' },
+    }
+    const text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    assert.deepEqual(mini.errors, [])
+    // 退避会把「下次检查」拉长（最长 30 分钟）。徽标必须说明原因，否则看起来像「60 秒没生效」。
+    assert.match(text, /退避 ×3/)
+    const badge = findNode(mini, (node) => typeof node.props?.['data-gti-auto-badge'] === 'string')
+    assert.match(badge.props.title, /连续失败 3 次/)
+    assert.match(badge.props.title, /token-missing/)
+  } finally {
+    FIXTURES.watch.status = savedStatus
+  }
+})
 
 test('筛选条改动会触发重新取数', async () => {
   const { fake, mini } = await newWorld()
@@ -826,13 +887,39 @@ test('自动分配：从绑定设置进得去，渲染出全局开关与本工�
 test('自动分配：待投递与最近投递都渲染出来（否则用户看不出它干了什么）', async () => {
   const { fake, mini } = await newWorld()
   const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
-  await openAutoPanel(mini, WorkspaceBoard)
+  const paint = await openAutoPanel(mini, WorkspaceBoard)
 
-  const text = mini.text ?? ''
+  const text = await paint()
   assert.ok(findNodes(mini, (node) => node.props?.['data-gti-watch-pending'] !== undefined).length > 0, '要有待投递列表')
   assert.ok(findNodes(mini, (node) => node.props?.['data-gti-watch-deliveries'] !== undefined).length > 0, '要有最近投递列表')
   assert.ok(findNodes(mini, (node) => node.props?.['data-gti-watch-status'] !== undefined).length > 0, '要有状态块')
-  assert.ok(text.includes('待办标题') || true)
+  // 「下次检查」既给绝对时刻也给倒计时：绝对时刻对表，倒计时看得出轮询还活着。
+  assert.match(text, /下次检查/)
+  assert.ok(findNodes(mini, (node) => node.props?.['data-gti-auto-countdown'] === 'true').length > 0,
+    '运行状态的下次检查要有倒计时锚点')
+  assert.ok(text.includes('待办标题'))
+})
+
+test('自动分配：连续失败时状态块说明正在退避（否则「下次检查」变长像配置没生效）', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const savedStatus = FIXTURES.watch.status
+  try {
+    FIXTURES.watch.status = {
+      ...savedStatus,
+      consecutiveFailures: 2,
+      lastError: { code: 'token-missing', message: 'no token', at: '2026-10-25T09:00:00.000Z' },
+    }
+    const paint = await openAutoPanel(mini, WorkspaceBoard)
+    const text = await paint()
+    assert.deepEqual(mini.errors, [])
+    assert.ok(findNodes(mini, (node) => node.props?.['data-gti-watch-backoff'] === 'true').length > 0,
+      '状态块要有退避说明')
+    assert.match(text, /连续失败 2 次/)
+    assert.match(text, /上次失败/)
+  } finally {
+    FIXTURES.watch.status = savedStatus
+  }
 })
 
 test('自动分配：点「立即检查一次」会打 watch.tick', async () => {

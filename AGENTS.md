@@ -18,7 +18,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（103 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（108 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -44,7 +44,7 @@
 | [lib/triggers.js](lib/triggers.js) | **纯函数**：账本 + issues + 评论 → 触发（矩阵的主战场） |
 | [lib/watchstore.js](lib/watchstore.js) | 自动分配账本 `watch.json`：schema、收敛、剪枝 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 103 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 108 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 | [docs/auto-assign-design.md](docs/auto-assign-design.md) | 自动分配的设计稿：口径、账本、幂等闸门、边界 |
@@ -129,6 +129,16 @@
     只能显示对应的降级文案/不显示（演练单独一档）。**别按「面板草稿的默认值」判断** —— 账本里
     没有这个 root 时轮询器根本不会轮到它，说成「已开」就是假承诺。徽标本身是入口（点开自动分配
     设置，返回回列表），账本由看板自己读 `watch.get`，别交给配置页的面板喂。
+    徽标里的「`mm:ss` 后检查」倒计时放在独立子组件 `AutoCountdown` 里（每秒重渲染只落在几个
+    字符上，塞进看板主体会让整个列表每秒重画）；只有「开启 / 演练」两档给倒计时，到点后每 5 秒
+    最多回调一次账本重读（自愈，又不把桥当轮询器使）；定时器在 Node 里要 `unref()`，否则
+    `node --test` 跑完不退。徽标还要把**退避**露出来（`退避 ×N` + 悬停里的上次错误）：退避会把
+    下一轮拉长到 30 分钟，不说明原因就会被当成「设置的间隔没生效」。
+24. **改自动分配配置必须让排程立刻跟上**：`watch.set` 写完账本要调 `watch.refreshSchedule()`
+    （按新间隔重排 + 退避清零 + 总闸关掉时清空 `nextTickAt` 并 disarm）。`setTimeout` 的延迟是在
+    arm 时算死的 —— 只写账本的话，用户改完间隔要等旧定时器烧完（可能是 30 分钟退避），界面上
+    就变成「我设了 60 秒，怎么还要 13 分钟」（2026-10-25 实报）。失败退避本身要保留，但必须
+    在状态块与徽标上可见（连续失败次数 + 上次错误码/原因）。
 
 ## 代码风格
 
@@ -180,7 +190,7 @@ node --check index.js && node --check client.js
   的「全局看板列表：范围由绑定决定」一节；`tests/client.test.mjs` 里那四条范围用例跟着改。
 - **动「自动投递」徽标**（判据、文案、入口与返回路径）→ 同步 README 的「界面长什么样 · 工作区看板」、
   「只能在浏览器里看的」第 20 条与 [IMPLEMENTATION.md](IMPLEMENTATION.md) 的「徽标」一节；
-  `tests/client.test.mjs` 里那三条徽标用例跟着改。
+  `tests/client.test.mjs` 里那五条徽标与倒计时用例跟着改。
 - **动「发送到 DSH」**（提示词格式、入口位置、失败横幅）→ 同步 README 的「界面长什么样」、
   「只能在浏览器里看的」第 15 条与「已知边界」，以及 [IMPLEMENTATION.md](IMPLEMENTATION.md)
   的「发送到 DSH」一节；`tests/client.test.mjs` 里那四条用例跟着改。

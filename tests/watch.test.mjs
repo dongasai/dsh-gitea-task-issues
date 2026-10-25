@@ -141,12 +141,14 @@ async function makeHarness(options) {
 
   /** 可推进的时钟。 */
   const clock = { ms: Date.parse('2026-10-17T00:00:00.000Z') }
+  /** 每次 armTimer 的延迟（毫秒）—— 用来断言「改完配置有没有立刻重排」。 */
+  const timers = []
   const watch = createWatch({
     ctx,
     store,
     watchStore,
     now: () => clock.ms,
-    setTimer: () => 0,
+    setTimer: (fn, ms) => { timers.push(ms); return timers.length },
     clearTimer: () => {},
     random: () => 0,
   })
@@ -158,6 +160,7 @@ async function makeHarness(options) {
     ctx,
     calls,
     clock,
+    timers,
     /** 改 `list()` 的返回（模拟某个工作区在跑 turn）。 */
     setSessions: (next) => { sessions = next },
     /** 让 `create` 抛错。 */
@@ -222,6 +225,46 @@ after(async () => {
 })
 
 // ── 基线 ────────────────────────────────────────────────────────────────────
+
+/**
+ * 等一个条件成立（轮询器里 await 很多，排程不是同步完成的）。
+ * @param predicate - 条件。
+ * @param message - 超时信息。
+ * @returns 无。
+ */
+async function waitFor(predicate, message) {
+  for (let i = 0; i < 200; i += 1) {
+    if (predicate()) return
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  throw new Error(message)
+}
+
+test('改间隔 / 关总闸之后立刻重排下一轮，不再等旧定时器烧完', async () => {
+  const server = await useGitea()
+  const harness = await makeHarness({
+    server,
+    root: '/data/ai/dsh/gitea_task_issues',
+    global: { intervalSeconds: 1200 },
+  })
+  const { watch, watchStore, clock } = harness
+  const remaining = () => Date.parse(watch.status().nextTickAt) - clock.ms
+
+  watch.start()
+  await waitFor(() => watch.status().nextTickAt !== null, '首轮 tick 没有排程')
+  assert.equal(remaining(), 1_200_000, '首轮按 1200 秒排程')
+
+  // 用户把间隔改成 60 秒：桥写完账本会调 `refreshSchedule()`，新间隔必须马上生效。
+  // 旧实现只在定时器烧完那一刻才重读间隔 —— 界面上的「下次检查」会挂着一个陈旧值。
+  await watchStore.mutate((draft) => { draft.global.intervalSeconds = 60 })
+  await watch.refreshSchedule()
+  assert.equal(remaining(), 60_000, '新间隔要立刻生效，而不是等 1200 秒的旧定时器')
+
+  // 关总闸：没有「下一次检查」这回事，别在状态里留一个会发生的时刻。
+  await watchStore.mutate((draft) => { draft.global.enabled = false })
+  await watch.refreshSchedule()
+  assert.equal(watch.status().nextTickAt, null)
+})
 
 test('首次 tick 只建基线：不查会话、不建会话、不投递', async () => {
   const server = await useGitea()

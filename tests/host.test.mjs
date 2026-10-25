@@ -757,6 +757,18 @@ test('watch.set：只接受 global / root + rootConfig，且仓库由绑定解�
   assert.equal(globalNext.global.intervalSeconds, 300)
   assert.equal(globalNext.global.maxSessionsPerHour, 3)
   assert.equal(globalNext.global.enabled, false, '没碰的字段保持不变')
+
+  // 改间隔必须**立刻**重排下一轮：定时器的延迟是在 arm 时算死的，只写账本得等旧定时器烧完
+  //（可能是 30 分钟退避）—— 界面的「下次检查」会挂着一个陈旧值，看起来像设置没生效。
+  await ok('watch.set', { global: { enabled: true, intervalSeconds: 90 } })
+  const scheduled = await ok('watch.get')
+  const remaining = Date.parse(scheduled.status.nextTickAt) - Date.now()
+  assert.ok(remaining > 75_000 && remaining <= 100_000, `改间隔后应立即按新间隔重排（实际 ${remaining}ms）`)
+
+  // 关总闸：没有下一次检查，`nextTickAt` 归零，别让界面显示一个不会发生的时刻。
+  const off = await ok('watch.set', { global: { enabled: false } })
+  assert.equal(off.global.enabled, false)
+  assert.equal((await ok('watch.get')).status.nextTickAt, null)
 })
 
 test('watch.set：参数越界一律 400，不把脏配置写进去', async () => {

@@ -309,10 +309,16 @@ window.__ModuleLoader__.load({
       'auto.badge.unavailable': '自动投递·不可用',
       'auto.badge.pending': '待投递 {n}',
       'auto.badge.next': '下次检查 {at}',
+      'auto.badge.countdown': '{time} 后检查',
+      'auto.badge.due': '即将检查',
+      'auto.badge.backoff': '退避 ×{n}',
       'auto.badge.hint.on': '这个工作区已开启自动投递：出现新任务会开一个新会话处理。点开设置',
       'auto.badge.hint.dry': '自动投递在演练模式：只记账、不开会话。点开设置',
       'auto.badge.hint.mismatch': '绑定的仓库变了，轮询器已跳过这个工作区；重新保存自动分配配置后恢复。点开设置',
       'auto.badge.hint.unavailable': '当前宿主没有会话服务，自动投递开不了会话。点开设置',
+      // 失败退避：连续失败会把下一轮拉长（最长 30 分钟）。不写出来，用户只会觉得「我设的间隔没生效」。
+      'auto.state.backoff': '连续失败 {n} 次，正在退避重试（下次检查被拉长）',
+      'auto.intervalHint': '改完立刻按新间隔重排下一轮；60 秒是下限。',
       'binding.title': '工作区绑定',
       'binding.repo': '仓库（owner/name）',
       'binding.server': '服务器',
@@ -561,10 +567,15 @@ window.__ModuleLoader__.load({
       'auto.badge.unavailable': 'Auto delivery · unavailable',
       'auto.badge.pending': '{n} pending',
       'auto.badge.next': 'next check {at}',
+      'auto.badge.countdown': 'next check in {time}',
+      'auto.badge.due': 'due now',
+      'auto.badge.backoff': 'backoff ×{n}',
       'auto.badge.hint.on': 'This workspace delivers automatically: a new task opens a new session. Open settings',
       'auto.badge.hint.dry': 'Automatic delivery is in dry-run mode: it only records, never opens sessions. Open settings',
       'auto.badge.hint.mismatch': 'The bound repository changed, so the poller skips this workspace; save the automatic assignment again to resume. Open settings',
       'auto.badge.hint.unavailable': 'This host has no session service, so automatic delivery cannot open sessions. Open settings',
+      'auto.state.backoff': '{n} consecutive failures; retrying with backoff (the next check is pushed out)',
+      'auto.intervalHint': 'Takes effect immediately after saving; 60 s is the minimum.',
       'binding.title': 'Workspace binding',
       'binding.repo': 'Repository (owner/name)',
       'binding.server': 'Server',
@@ -819,6 +830,22 @@ window.__ModuleLoader__.load({
       if (Number.isNaN(date.getTime())) return value
       const pad = (number) => String(number).padStart(2, '0')
       return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+    }
+
+    /**
+     * 毫秒 → `mm:ss`（超过一小时给 `h:mm:ss`）。
+     *
+     * 倒计时**向上取整**：向下取整会让最后一秒提前显示 `00:00`，看起来像「已经到点但没动」。
+     * @param milliseconds - 剩余毫秒。
+     * @returns 倒计时文本。
+     */
+    function formatCountdown(milliseconds) {
+      const total = Math.max(0, Math.ceil(milliseconds / 1000))
+      const hours = Math.floor(total / 3600)
+      const pad = (number) => String(number).padStart(2, '0')
+      const minutes = Math.floor((total % 3600) / 60)
+      const seconds = total % 60
+      return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`
     }
 
     /** 秒 → `2h 30m` / `45m`。 */
@@ -2151,6 +2178,7 @@ window.__ModuleLoader__.load({
               disabled: busy,
               onChange: (event) => void patchGlobal({ intervalSeconds: number(event.target.value, 120) }),
             })),
+          h('p', { className: 'dsh-gti-note', 'data-gti-watch-interval-hint': 'true' }, t('auto.intervalHint')),
           h('div', { className: 'dsh-gti-field' },
             h('label', { className: 'dsh-gti-field-label' }, t('auto.quota')),
             h('input', {
@@ -2273,12 +2301,20 @@ window.__ModuleLoader__.load({
             ? null
             : h('li', null, `${t('auto.state.baseline')}: ${state.global.baselinedAt}`),
           h('li', null, `${t('auto.state.watermark')}: ${status.lastTickAt ?? '—'}`),
-          h('li', null, `${t('auto.state.next')}: ${status.nextTickAt ?? '—'}`),
+          // 下次检查给「绝对时刻 + 倒计时」：绝对时刻用来对表，倒计时用来看出轮询还活着。
+          h('li', null, `${t('auto.state.next')}: ${status.nextTickAt === null || status.nextTickAt === undefined ? '—' : shortTime(status.nextTickAt)}`,
+            status.nextTickAt === null || status.nextTickAt === undefined
+              ? null
+              : h(AutoCountdown, { at: status.nextTickAt, t, onDue: () => void load() })),
           saved === null
             ? null
             : h('li', null, `${t('auto.state.repo')}: ${saved.owner}/${saved.repo}`),
           status.serviceAvailable === false ? h('li', { 'data-tone': 'warn' }, t('auto.state.unavailable')) : null,
           status.locked === false ? h('li', { 'data-tone': 'warn' }, t('auto.state.locked')) : null,
+          // 退避中要说出来：否则「下次检查」比设置的间隔长很多，看起来像配置没生效。
+          status.consecutiveFailures > 0
+            ? h('li', { 'data-tone': 'warn', 'data-gti-watch-backoff': 'true' }, t('auto.state.backoff', { n: status.consecutiveFailures }))
+            : null,
           status.lastError === null
             ? null
             : h('li', { 'data-tone': 'error' }, t('auto.error', { code: status.lastError.code, message: status.lastError.message }))),
@@ -2885,11 +2921,14 @@ window.__ModuleLoader__.load({
      * 待投递条数按 issue 键前缀（`serverId/owner/repo#`）算 —— `watch.get` 的 pending 不带 root，
      * 而键里已经写死了仓库。
      *
+     * 倒计时（`countdownAt`）只在**这个工作区真会被轮到**的两档（开启 / 演练）给：仓库对不上或
+     * 宿主无会话服务时，全局下一轮检查跟这个工作区无关，摆一个倒计时只会误导。
+     *
      * @param watch - `watch.get` 的应答（可能为 null / 读取失败）。
      * @param root - 当前工作区根（`binding.root`），没有绑定就是 null。
      * @param effective - 当前生效的仓库 `{ serverId, owner, repo }`，没有就是 null。
      * @param t - 文案函数。
-     * @returns `{ kind, text, hint }` 或 null（不该显示徽标）。
+     * @returns `{ kind, text, hint, countdownAt }` 或 null（不该显示徽标）。
      */
     function autoDeliveryBadge(watch, root, effective, t) {
       if (watch === null || root === null || effective === null) return null
@@ -2897,23 +2936,66 @@ window.__ModuleLoader__.load({
       const config = watch.roots?.[root] ?? null
       if (config === null || config.enabled !== true) return null
       const nextTickAt = watch.status?.nextTickAt ?? null
+      const failures = Number(watch.status?.consecutiveFailures ?? 0)
+      const lastError = watch.status?.lastError ?? null
       const hintFor = (kind) => {
-        const base = t(`auto.badge.hint.${kind}`)
-        return nextTickAt === null ? base : `${base} · ${t('auto.badge.next', { at: shortTime(nextTickAt) })}`
+        const parts = [t(`auto.badge.hint.${kind}`)]
+        if (nextTickAt !== null) parts.push(t('auto.badge.next', { at: shortTime(nextTickAt) }))
+        // 退避中 / 上次失败也写进悬停：倒计时被拉长时，得能一眼看出是「退避」而不是设置没生效。
+        if (failures > 0) parts.push(t('auto.state.backoff', { n: failures }))
+        if (lastError !== null) parts.push(t('auto.error', { code: lastError.code ?? '?', message: lastError.message ?? '' }))
+        return parts.join(' · ')
       }
       const prefix = `${config.serverId}/${config.owner}/${config.repo}#`
       const pending = (watch.pending ?? []).filter((item) => String(item.key ?? '').startsWith(prefix)).length
       const withPending = (text) => (pending === 0 ? text : `${text} · ${t('auto.badge.pending', { n: pending })}`)
+      const withBackoff = (text) => (failures === 0 ? text : `${text} · ${t('auto.badge.backoff', { n: failures })}`)
       if (config.serverId !== effective.serverId || config.owner !== effective.owner || config.repo !== effective.repo) {
-        return { kind: 'mismatch', text: withPending(t('auto.badge.mismatch')), hint: hintFor('mismatch') }
+        return { kind: 'mismatch', text: withBackoff(withPending(t('auto.badge.mismatch'))), hint: hintFor('mismatch'), countdownAt: null }
       }
       if (watch.status?.serviceAvailable === false) {
-        return { kind: 'unavailable', text: withPending(t('auto.badge.unavailable')), hint: hintFor('unavailable') }
+        return { kind: 'unavailable', text: withBackoff(withPending(t('auto.badge.unavailable'))), hint: hintFor('unavailable'), countdownAt: null }
       }
       if (watch.global?.dryRun === true) {
-        return { kind: 'dry', text: withPending(t('auto.badge.dry')), hint: hintFor('dry') }
+        return { kind: 'dry', text: withBackoff(withPending(t('auto.badge.dry'))), hint: hintFor('dry'), countdownAt: nextTickAt }
       }
-      return { kind: 'on', text: withPending(t('auto.badge.on')), hint: hintFor('on') }
+      return { kind: 'on', text: withBackoff(withPending(t('auto.badge.on'))), hint: hintFor('on'), countdownAt: nextTickAt }
+    }
+
+    /**
+     * 徽标里的「还有多久检查下一轮」倒计时。
+     *
+     * 单独一个组件：每秒的重渲染必须**只落在几个字符上** —— 塞进看板主体的话，整个 issue 列表
+     * （泳道 / 卡片）会跟着每秒重画一遍。到点（`remaining <= 0`）后按 5 秒节流调 `onDue`，让父
+     * 组件重读账本、拿新的 `nextTickAt`（不然倒计时会永远停在「即将检查」）。
+     *
+     * @param props - `at`（ISO 时刻）/ `t` / `onDue`（到点回调，可省略）。
+     */
+    function AutoCountdown({ at, t, onDue }) {
+      const [now, setNow] = React.useState(() => Date.now())
+      const [lastNotifyAt, setLastNotifyAt] = React.useState(0)
+      React.useEffect(() => {
+        setNow(Date.now())
+        setLastNotifyAt(0)
+        const timer = setInterval(() => setNow(Date.now()), 1000)
+        // 浏览器里 setInterval 返回 number；Node（探针）里是 Timeout，unref 掉才不会把测试进程
+        // 吊在事件循环上（探针不会卸载组件，不 unref 就会一直有个活定时器）。
+        if (typeof timer === 'object' && timer !== null && typeof timer.unref === 'function') timer.unref()
+        return () => clearInterval(timer)
+      }, [at])
+      const remaining = Date.parse(at) - now
+      React.useEffect(() => {
+        if (!Number.isFinite(remaining) || remaining > 0) return
+        // 到点后每隔 5 秒最多重读一次账本：正常情况下一轮 tick 就在眼前，读回来的 `nextTickAt`
+        // 立刻变新、倒计时接着走；万一这一轮被工作区忙 / 别人持锁跳过，也不能让倒计时永远停在
+        // 「即将检查」（5 秒既是自愈间隔，也是不把桥当轮询器使的上限）。
+        if (now - lastNotifyAt < 5000) return
+        setLastNotifyAt(now)
+        onDue?.()
+      }, [remaining, now, lastNotifyAt, onDue])
+      if (!Number.isFinite(remaining)) return null
+      return h('span', { 'data-gti-auto-countdown': 'true' }, ' · ',
+        remaining <= 0 ? t('auto.badge.due') : t('auto.badge.countdown', { time: formatCountdown(remaining) }))
     }
 
     /**
@@ -3034,7 +3116,8 @@ window.__ModuleLoader__.load({
           'data-tone': autoBadge.kind === 'on' ? 'brand' : undefined,
           title: autoBadge.hint,
           onClick: () => setView({ kind: 'auto', from: 'list' }),
-        }, autoBadge.text),
+        }, autoBadge.text,
+        autoBadge.countdownAt === null ? null : h(AutoCountdown, { at: autoBadge.countdownAt, t, onDue: loadAuto })),
         h('span', { className: 'dsh-gti-spacer' }),
         h('button', {
           type: 'button',
