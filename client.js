@@ -302,6 +302,17 @@ window.__ModuleLoader__.load({
       'auto.saved': '已保存。',
       'auto.tickDone': '本轮投递 {n} 个会话。',
       'auto.repoMismatch': '绑定的仓库变了，请重新保存自动分配配置。',
+      // 工作区看板标题栏的徽标：只在**真的会被投递**时出现（判据与 lib/watch.js 的 planRoots 同一套）。
+      'auto.badge.on': '自动投递已开',
+      'auto.badge.dry': '自动投递·演练',
+      'auto.badge.mismatch': '自动投递·需重存',
+      'auto.badge.unavailable': '自动投递·不可用',
+      'auto.badge.pending': '待投递 {n}',
+      'auto.badge.next': '下次检查 {at}',
+      'auto.badge.hint.on': '这个工作区已开启自动投递：出现新任务会开一个新会话处理。点开设置',
+      'auto.badge.hint.dry': '自动投递在演练模式：只记账、不开会话。点开设置',
+      'auto.badge.hint.mismatch': '绑定的仓库变了，轮询器已跳过这个工作区；重新保存自动分配配置后恢复。点开设置',
+      'auto.badge.hint.unavailable': '当前宿主没有会话服务，自动投递开不了会话。点开设置',
       'binding.title': '工作区绑定',
       'binding.repo': '仓库（owner/name）',
       'binding.server': '服务器',
@@ -544,6 +555,16 @@ window.__ModuleLoader__.load({
       'auto.saved': 'Saved.',
       'auto.tickDone': 'Delivered {n} session(s) this round.',
       'auto.repoMismatch': 'The bound repository changed; save the automatic assignment again.',
+      'auto.badge.on': 'Auto delivery on',
+      'auto.badge.dry': 'Auto delivery · dry run',
+      'auto.badge.mismatch': 'Auto delivery · re-save',
+      'auto.badge.unavailable': 'Auto delivery · unavailable',
+      'auto.badge.pending': '{n} pending',
+      'auto.badge.next': 'next check {at}',
+      'auto.badge.hint.on': 'This workspace delivers automatically: a new task opens a new session. Open settings',
+      'auto.badge.hint.dry': 'Automatic delivery is in dry-run mode: it only records, never opens sessions. Open settings',
+      'auto.badge.hint.mismatch': 'The bound repository changed, so the poller skips this workspace; save the automatic assignment again to resume. Open settings',
+      'auto.badge.hint.unavailable': 'This host has no session service, so automatic delivery cannot open sessions. Open settings',
       'binding.title': 'Workspace binding',
       'binding.repo': 'Repository (owner/name)',
       'binding.server': 'Server',
@@ -614,6 +635,12 @@ window.__ModuleLoader__.load({
 .dsh-gti-dot[data-state="closed"]{background:var(--dsw-alias-label-tertiary);border-color:transparent}
 .dsh-gti-chip{display:inline-flex;align-items:center;gap:4px;max-width:22ch;padding:1px 6px;border-radius:999px;border:.5px solid var(--dsw-alias-border-l2);font-size:11px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsh-gti-chip[data-tone="brand"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
+/* 可点的徽标（工作区看板的「自动投递」入口）：要能和状态标签区分开，但别做成主按钮。 */
+.dsh-gti-chip-button{max-width:none;cursor:pointer;font-family:inherit;background:none}
+.dsh-gti-chip-button:hover{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
+.dsh-gti-chip-button[data-gti-auto-badge="dry"],
+.dsh-gti-chip-button[data-gti-auto-badge="mismatch"],
+.dsh-gti-chip-button[data-gti-auto-badge="unavailable"]{border-color:var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}
 .dsh-gti-label-dot{flex:none;width:8px;height:8px;border-radius:2px}
 .dsh-gti-detail{flex:1 1 auto;min-height:0;overflow:auto;padding:12px 16px 40px}
 .dsh-gti-detail-head{display:flex;align-items:flex-start;gap:8px}
@@ -2843,6 +2870,53 @@ window.__ModuleLoader__.load({
     // ── 工作区看板（右侧栏页签） ────────────────────────────────────────────
 
     /**
+     * 工作区看板标题栏的「自动投递」徽标：只在**真的会被投递**时出现。
+     *
+     * 判据必须和轮询器（[lib/watch.js](lib/watch.js) 的 `planRoots`）逐条对齐，否则会给出
+     * 一个假的承诺 —— 旧版界面里自动分配配置藏在一个二级页里，用户在工作区看板上完全看不出
+     * 它开着没开（用户 2026-10-25 反馈）。四道闸缺一不可：
+     * 1. 全局总开关 `global.enabled === true`；
+     * 2. 这个工作区**在账本里有配置**且 `enabled === true`（没配过 = 不会被轮询，不能按面板
+     *    草稿里的默认 `true` 说成开着）；
+     * 3. 账本里记的仓库要和当前绑定一致 —— 换过绑定后轮询器会跳过它（`binding-changed`）；
+     * 4. 宿主挂了会话服务，否则「开了」也开不出会话。
+     * 演练（`dryRun`）单独一档：看起来开着，但实际只记账。
+     *
+     * 待投递条数按 issue 键前缀（`serverId/owner/repo#`）算 —— `watch.get` 的 pending 不带 root，
+     * 而键里已经写死了仓库。
+     *
+     * @param watch - `watch.get` 的应答（可能为 null / 读取失败）。
+     * @param root - 当前工作区根（`binding.root`），没有绑定就是 null。
+     * @param effective - 当前生效的仓库 `{ serverId, owner, repo }`，没有就是 null。
+     * @param t - 文案函数。
+     * @returns `{ kind, text, hint }` 或 null（不该显示徽标）。
+     */
+    function autoDeliveryBadge(watch, root, effective, t) {
+      if (watch === null || root === null || effective === null) return null
+      if (watch.global?.enabled !== true) return null
+      const config = watch.roots?.[root] ?? null
+      if (config === null || config.enabled !== true) return null
+      const nextTickAt = watch.status?.nextTickAt ?? null
+      const hintFor = (kind) => {
+        const base = t(`auto.badge.hint.${kind}`)
+        return nextTickAt === null ? base : `${base} · ${t('auto.badge.next', { at: shortTime(nextTickAt) })}`
+      }
+      const prefix = `${config.serverId}/${config.owner}/${config.repo}#`
+      const pending = (watch.pending ?? []).filter((item) => String(item.key ?? '').startsWith(prefix)).length
+      const withPending = (text) => (pending === 0 ? text : `${text} · ${t('auto.badge.pending', { n: pending })}`)
+      if (config.serverId !== effective.serverId || config.owner !== effective.owner || config.repo !== effective.repo) {
+        return { kind: 'mismatch', text: withPending(t('auto.badge.mismatch')), hint: hintFor('mismatch') }
+      }
+      if (watch.status?.serviceAvailable === false) {
+        return { kind: 'unavailable', text: withPending(t('auto.badge.unavailable')), hint: hintFor('unavailable') }
+      }
+      if (watch.global?.dryRun === true) {
+        return { kind: 'dry', text: withPending(t('auto.badge.dry')), hint: hintFor('dry') }
+      }
+      return { kind: 'on', text: withPending(t('auto.badge.on')), hint: hintFor('on') }
+    }
+
+    /**
      * 工作区看板：当前会话绑定仓库的 issues。
      * @param props - `api` / `t` / `sessionId`，外加可选的 `inputActions`（侧栏渲染点真给了就直接
      *   用它，没给就退回 `conversation.input.dock` 哨兵登记的那份）。
@@ -2861,6 +2935,8 @@ window.__ModuleLoader__.load({
       const [error, setError] = React.useState(null)
       /** 「发送到 DSH」的结果横幅，列表页与详情页共用（详情页那次由 `sendNotice` 传下去）。 */
       const [send, setSend] = React.useState(null)
+      /** 自动分配的账本快照：标题栏徽标要据此判断「这个工作区到底会不会被投递」。 */
+      const [auto, setAuto] = React.useState(null)
       const debouncedKeyword = useDebounced(keyword)
 
       /** 按状态分泳道时状态筛选被接管（取数固定全部、控件置灰）：理由见 GlobalBoard 同名处。 */
@@ -2910,8 +2986,21 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => { void loadBinding() }, [loadBinding])
 
+      /**
+       * 自动分配账本由**看板自己**读，理由同绑定：列表页标题栏要显示「自动投递开着没开」，
+       * 而配置页只是其中一个视图 —— 交给只在配置页挂载的面板读，列表页就永远是瞎的。
+       * 读失败只当没有徽标（不打扰列表本身）。
+       */
+      const loadAuto = React.useCallback(async () => {
+        const result = await api.autoGet()
+        if (result.ok) setAuto(result.data)
+      }, [api])
+
+      React.useEffect(() => { void loadAuto() }, [loadAuto])
+
       const effective = binding?.effective ?? null
       const target = effective === null ? null : { serverId: effective.serverId, owner: effective.owner, repo: effective.repo }
+      const autoBadge = autoDeliveryBadge(auto, binding?.root ?? null, effective, t)
 
       const load = React.useCallback(async () => {
         if (target === null) {
@@ -2936,6 +3025,16 @@ window.__ModuleLoader__.load({
           effective === null ? t('app.title') : `${effective.owner}/${effective.repo}`),
         effective === null ? null : h('span', { className: 'dsh-gti-note' },
           effective.source === 'binding' ? t('binding.manual') : t('binding.auto')),
+        // 「自动投递开着没开」必须在这一屏就能看见（用户 2026-10-25 反馈）：徽标本身就是入口，
+        // 点一下直接进自动分配设置，不用先摸齿轮再找按钮。
+        autoBadge === null ? null : h('button', {
+          type: 'button',
+          className: 'dsh-gti-chip dsh-gti-chip-button',
+          'data-gti-auto-badge': autoBadge.kind,
+          'data-tone': autoBadge.kind === 'on' ? 'brand' : undefined,
+          title: autoBadge.hint,
+          onClick: () => setView({ kind: 'auto', from: 'list' }),
+        }, autoBadge.text),
         h('span', { className: 'dsh-gti-spacer' }),
         h('button', {
           type: 'button',
@@ -2956,7 +3055,8 @@ window.__ModuleLoader__.load({
           type: 'button',
           className: 'dsh-gti-icon-button',
           title: t('common.refresh'),
-          onClick: () => void load(),
+          // 徽标依据的账本状态会变（别处跑了一轮、改了开关），刷新要连它一起重读。
+          onClick: () => { void load(); void loadAuto() },
         }, h(Icon, { name: 'refresh' })))
 
       const filterBar = h(FilterBar, {
@@ -3000,7 +3100,7 @@ window.__ModuleLoader__.load({
             error: bindingError,
             reload: loadBinding,
             onChanged: () => { void reloadConfig(); void load() },
-            onOpenAuto: () => setView({ kind: 'auto' }),
+            onOpenAuto: () => setView({ kind: 'auto', from: 'binding' }),
           }))
       }
 
@@ -3008,13 +3108,22 @@ window.__ModuleLoader__.load({
         return h('div', { className: 'dsh-gti-root', 'data-gti-workspace': 'true' },
           h('style', null, CSS),
           h('div', { className: 'dsh-gti-bar' },
-            h('button', { type: 'button', className: 'dsh-gti-icon-button', title: t('common.back'), onClick: () => setView({ kind: 'binding' }) }, h(Icon, { name: 'back' })),
+            // 返回时重读账本：面板里刚改的开关 / 刚存下的配置要立刻反映到列表页的徽标上。
+            // 回哪一页取决于「从哪进来的」：点标题栏徽标进来的应该直接回列表，别多按一次返回。
+            h('button', {
+              type: 'button',
+              className: 'dsh-gti-icon-button',
+              title: t('common.back'),
+              'data-gti-auto-back': 'true',
+              onClick: () => { void loadAuto(); setView({ kind: view.from === 'list' ? 'list' : 'binding' }) },
+            }, h(Icon, { name: 'back' })),
             h('span', { className: 'dsh-gti-bar-title' }, t('auto.title'))),
           h(AutoAssignPanel, {
             api,
             t,
             sessionId,
             binding,
+            onChanged: () => void loadAuto(),
           }))
       }
 

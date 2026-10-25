@@ -448,6 +448,93 @@ test('工作区看板：没有 sessionId 时降级提示，不炸', async () => 
   assert.match(text, /Gitea/, '没有会话时应当给出提示而不是空白')
 })
 
+test('工作区看板：自动投递开着时标题栏有徽标，点按直接进自动分配设置', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+
+  calls.length = 0
+  await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+  assert.deepEqual(mini.errors, [])
+
+  const badge = findNode(mini, (node) => typeof node.props?.['data-gti-auto-badge'] === 'string')
+  assert.ok(badge, '开启自动投递时标题栏必须有可见徽标（用户 2026-10-25 反馈的正是这个缺口）')
+  assert.equal(badge.props['data-gti-auto-badge'], 'on')
+  assert.match(badge.props.children, /自动投递已开/)
+  // fixtures 的 pending 里 #9 属于 srv-a/dongasai/mylike —— 徽标按「当前仓库」算待投递条数。
+  assert.match(badge.props.children, /待投递 1/)
+  assert.match(badge.props.title, /下次检查/, '悬停要能看出轮询还在跑（带下次检查时刻）')
+  assert.ok(calls.some((call) => call.op === 'watch.get'), '徽标要自己读账本，不能等配置页来喂')
+
+  // 徽标本身就是入口：点一下直接进自动分配设置，不必先摸齿轮。
+  badge.props.onClick()
+  await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+  assert.deepEqual(mini.errors, [])
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-watch'] === 'true'), '点徽标应直接进自动分配设置')
+
+  // 从徽标进来的返回应该回列表，而不是先落到绑定设置页。
+  findNode(mini, (node) => node.props?.['data-gti-auto-back'] === 'true').props.onClick()
+  await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-filter-state'] === 'true'), '返回应回到列表页')
+})
+
+test('工作区看板：演练模式 / 仓库变更 / 宿主无会话服务各有对应徽标', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const kindOf = () => findNode(mini, (node) => typeof node.props?.['data-gti-auto-badge'] === 'string')?.props['data-gti-auto-badge'] ?? null
+  const savedGlobal = FIXTURES.watch.global
+  const savedRoots = FIXTURES.watch.roots
+  const savedStatus = FIXTURES.watch.status
+  try {
+    // 演练：看起来开着，其实只记账 —— 必须区别于「已开」，否则用户以为会话会被拉起来。
+    FIXTURES.watch.global = { ...savedGlobal, dryRun: true }
+    await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    assert.equal(kindOf(), 'dry')
+    assert.match(findNode(mini, (node) => node.props?.['data-gti-auto-badge'] === 'dry').props.children, /演练/)
+
+    // 绑定换过仓库：轮询器会跳过这个工作区，徽标不能还说「已开」。
+    FIXTURES.watch.global = { ...savedGlobal }
+    FIXTURES.watch.roots = {
+      '/work/mylike': { ...savedRoots['/work/mylike'], repo: 'moved' },
+    }
+    await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    assert.equal(kindOf(), 'mismatch')
+    assert.match(findNode(mini, (node) => node.props?.['data-gti-auto-badge'] === 'mismatch').props.title, /重新保存/)
+
+    // 宿主没挂会话服务：开着也开不出会话。
+    FIXTURES.watch.roots = savedRoots
+    FIXTURES.watch.status = { ...savedStatus, serviceAvailable: false }
+    await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    assert.equal(kindOf(), 'unavailable')
+  } finally {
+    FIXTURES.watch.global = savedGlobal
+    FIXTURES.watch.roots = savedRoots
+    FIXTURES.watch.status = savedStatus
+  }
+})
+
+test('工作区看板：总开关关着 / 这个工作区没配自动分配时不显示徽标', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const badgeOf = () => findNode(mini, (node) => typeof node.props?.['data-gti-auto-badge'] === 'string')
+  const savedGlobal = FIXTURES.watch.global
+  const savedRoots = FIXTURES.watch.roots
+  try {
+    FIXTURES.watch.global = { ...savedGlobal, enabled: false }
+    await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    assert.deepEqual(mini.errors, [])
+    assert.equal(badgeOf(), undefined, '总开关关着就不该亮徽标')
+
+    FIXTURES.watch.global = savedGlobal
+    FIXTURES.watch.roots = {}
+    await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    assert.equal(badgeOf(), undefined, '账本里没有这个工作区 = 不会被轮询，不能按面板默认值说成开着')
+  } finally {
+    FIXTURES.watch.global = savedGlobal
+    FIXTURES.watch.roots = savedRoots
+  }
+})
+
+
 test('筛选条改动会触发重新取数', async () => {
   const { fake, mini } = await newWorld()
   const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
