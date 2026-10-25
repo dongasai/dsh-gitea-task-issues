@@ -274,6 +274,8 @@ window.__ModuleLoader__.load({
       'auto.preset': '模式（Agent 预设）',
       'auto.presetHint': '自动打开的新会话用这个模式；「跟随宿主默认」等于 DSH 里设的默认模式。',
       'auto.presetNoRoster': '宿主没有提供预设名册，只能手填预设 id（留空也就是默认模式）。',
+      // 最常见的一种：Host 半边改过但没重启 —— 别让用户以为「下拉写成了输入框」。
+      'auto.presetOutdatedHost': '宿主还没有预设名册接口（presets.list）。多半是 Host 半边改了没重启：重启 Harness 后刷新页面就有下拉；在这之前只能手填预设 id。',
       'auto.presetFollow': '跟随宿主默认（{name}）',
       'auto.presetFollowUnnamed': '跟随宿主默认',
       'auto.presetMissing': '{id}（不在当前名册）',
@@ -548,6 +550,7 @@ window.__ModuleLoader__.load({
       'auto.preset': 'Mode (agent preset)',
       'auto.presetHint': 'Sessions opened automatically use this mode; "follow the host default" equals the default mode set in DSH.',
       'auto.presetNoRoster': 'This host provides no preset roster; type a preset id (empty also means the default mode).',
+      'auto.presetOutdatedHost': 'This host does not expose the preset roster yet (presets.list) — usually the Host half was updated without a restart. Restart the Harness and reload to get the dropdown; meanwhile type a preset id.',
       'auto.presetFollow': 'Follow host default ({name})',
       'auto.presetFollowUnnamed': 'Follow host default',
       'auto.presetMissing': '{id} (not in the current roster)',
@@ -2086,11 +2089,19 @@ window.__ModuleLoader__.load({
        * 这是可选服务，不能因为它缺席把整块自动分配面板拖垮（同「依赖是软的」那条约束）。
        */
       const [roster, setRoster] = React.useState(null)
+      /** 名册拉取失败的原因（`unknown-operation` = 旧宿主），用来把降级提示写准。 */
+      const [rosterError, setRosterError] = React.useState(null)
 
       React.useEffect(() => {
         let alive = true
         void api.presets().then((result) => {
-          if (alive && result.ok) setRoster(result.data ?? null)
+          if (!alive) return
+          if (result.ok) {
+            setRoster(result.data ?? null)
+            setRosterError(null)
+          } else {
+            setRosterError(result.code ?? 'request-failed')
+          }
         })
         return () => { alive = false }
       }, [api])
@@ -2385,7 +2396,9 @@ window.__ModuleLoader__.load({
                   ? []
                   : [h('option', { key: missingPreset, value: missingPreset }, t('auto.presetMissing', { id: missingPreset }))])),
             h('p', { className: 'dsh-gti-note', 'data-gti-preset-hint': 'true' },
-              rosterPresets === null ? t('auto.presetNoRoster') : t('auto.presetHint'))),
+              rosterPresets !== null
+                ? t('auto.presetHint')
+                : (rosterError === 'unknown-operation' ? t('auto.presetOutdatedHost') : t('auto.presetNoRoster')))),
           h('div', { className: 'dsh-gti-actions' },
             h('button', {
               type: 'button',

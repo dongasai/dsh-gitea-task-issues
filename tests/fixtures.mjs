@@ -135,7 +135,11 @@ export function bridgeAnswer(op, params) {
   calls.push({ op, params })
   if (op === 'config.get') return { ok: true, data: FIXTURES.config }
   if (op === 'binding.get') return { ok: true, data: FIXTURES.binding }
-  if (op === 'presets.list') return { ok: true, data: FIXTURES.presets }
+  // `presetsError` 用来模拟「宿主是旧版、没有 presets.list」，验降级提示。
+  if (op === 'presets.list') {
+    if (typeof FIXTURES.presetsError === 'string') return { ok: false, code: FIXTURES.presetsError, message: 'no such op' }
+    return { ok: true, data: FIXTURES.presets }
+  }
   if (op === 'repo.list') return { ok: true, data: FIXTURES.repos }
   if (op === 'repo.meta') return { ok: true, data: FIXTURES.meta }
   if (op === 'issue.detail') return { ok: true, data: FIXTURES.detail }

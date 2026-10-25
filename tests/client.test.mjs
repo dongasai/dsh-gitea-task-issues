@@ -1022,6 +1022,23 @@ test('自动分配：宿主没有预设名册时退回手填 id（面板不白�
   }
 })
 
+test('自动分配：旧宿主没有 presets.list 时，提示要说清「重启 Harness」', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  try {
+    FIXTURES.presetsError = 'unknown-operation'
+    await openAutoPanel(mini, WorkspaceBoard)
+
+    const manual = findNodes(mini, (node) => node.props?.['data-gti-watch-preset'] === 'manual')[0]
+    assert.ok(manual, '拿不到名册就退回手填（不能白屏）')
+    const text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    // 最常见的误判就是「下拉被写成了输入框」—— 提示里必须点出重启这一步。
+    assert.match(text, /重启 Harness/)
+  } finally {
+    delete FIXTURES.presetsError
+  }
+})
+
 test('自动分配：账本里存的预设已不在当前名册时也要显示出来，不能被悄悄改回默认', async () => {
   const { fake, mini } = await newWorld()
   const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component

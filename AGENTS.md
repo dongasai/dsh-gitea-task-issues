@@ -18,7 +18,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（115 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（116 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -44,7 +44,7 @@
 | [lib/triggers.js](lib/triggers.js) | **纯函数**：账本 + issues + 评论 → 触发（矩阵的主战场） |
 | [lib/watchstore.js](lib/watchstore.js) | 自动分配账本 `watch.json`：schema、收敛、剪枝 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 115 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 116 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 | [docs/auto-assign-design.md](docs/auto-assign-design.md) | 自动分配的设计稿：口径、账本、幂等闸门、边界 |
@@ -144,7 +144,9 @@
     （standard / ptc / minimal / cordis）；自定义预设用宿主给的 name。坏行（`broken`）要标出来
     并禁用；名册缺席（`available: false`）退回手填 id，**不要**在界面里写死预设清单，也不要因为
     拿不到名册把面板拖垮。存的值不在名册里时补一项「不在当前名册」保留现值 —— 否则下拉会显示成
-    默认档，用户一保存就把配置悄悄改掉。
+    默认档，用户一保存就把配置悄悄改掉。**降级提示要分两种**：名册服务缺席（`available:false`）
+    说「宿主没有提供预设名册」；`presets.list` 直接 `unknown-operation` 说明 Host 改了没重启，
+    提示里必须点出「重启 Harness」（用户第一反应就是「下拉怎么是输入框」）。
 26. **投递前的「同项目活跃会话上限」只数正在跑 turn 的普通会话**（`activeSessions`：`running`、
     `cwd === 工作区根`、`origin !== 'subagent'`），默认 1（也就是旧行为「工作区忙」）；上限字段
     是 `maxActiveSessions`（1..20，`lib/watchstore.js` 的 `MAX_ACTIVE_SESSIONS_CEILING`）。
