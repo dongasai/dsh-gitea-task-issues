@@ -84,6 +84,9 @@ async function makeHarness(options) {
       cooldownSeconds: 0,
       maxPerIssuePerDay: 5,
       giveUpAfterHours: 24,
+      // 与 `defaultRootWatch()` 保持一致：不显式给的话 `config.maxActiveSessions` 是 undefined，
+      // 闸门就永远不会触发（这个坑正好说明账本默认值必须在这里也写一遍）。
+      maxActiveSessions: 1,
       ...config,
     }
   })
@@ -380,7 +383,7 @@ test('自己发的评论不触发（防自激）', async () => {
 
 // ── 忙与幂等 ────────────────────────────────────────────────────────────────
 
-test('工作区忙：不建会话、不写已投递，下一轮空闲时再投', async () => {
+test('同项目活跃会话上限（默认 1）：有会话在跑就不开，下一轮空闲时再投', async () => {
   const server = await useGitea()
   seedIssue(server, 1, { updated_at: '2026-10-16T00:00:00.000Z' })
   const harness = await makeHarness({ server, root: '/data/ai/dsh/gitea_task_issues' })
@@ -393,9 +396,14 @@ test('工作区忙：不建会话、不写已投递，下一轮空闲时再投',
 
   assert.equal(busy.delivered, 0)
   assert.equal(busy.busy, 1)
+  assert.equal(busy.capped, 1, '被同项目活跃会话上限挡下的条数要能单独看出来')
   assert.equal(harness.calls.some((call) => call.method === 'create'), false)
   const ledger = await harness.watchStore.snapshot()
-  assert.equal(ledger.deliveries.at(-1).outcome, 'busy-skipped')
+  const last = ledger.deliveries.at(-1)
+  assert.equal(last.outcome, 'capped')
+  assert.equal(last.reason, 'active')
+  assert.equal(last.active, 1, '记下挡下时的活跃会话数，界面上能说清「1/1」')
+  assert.equal(last.limit, 1)
   // 关键：待办还在，否则这条任务永久丢了。
   assert.notEqual(ledger.issues['srv-test/dongasai/mylike#2'].pending, null)
 
@@ -406,6 +414,38 @@ test('工作区忙：不建会话、不写已投递，下一轮空闲时再投',
   assert.equal(later.delivered, 1)
   const ledger2 = await harness.watchStore.snapshot()
   assert.equal(ledger2.issues['srv-test/dongasai/mylike#2'].pending, null)
+})
+
+test('同项目活跃会话上限调到 3：两个在跑还能再开一个，满 3 才跳过', async () => {
+  const server = await useGitea()
+  seedIssue(server, 1, { updated_at: '2026-10-16T00:00:00.000Z' })
+  const harness = await makeHarness({
+    server,
+    root: '/data/ai/dsh/gitea_task_issues',
+    config: { maxActiveSessions: 3, cooldownSeconds: 0 },
+  })
+  await harness.watch.tickNow()
+
+  // 两条新任务 + 工作区里已经有两个在跑的会话。
+  seedIssue(server, 2)
+  seedIssue(server, 3)
+  harness.setSessions([
+    { sessionId: 'running-1', cwd: '/data/ai/dsh/gitea_task_issues', running: true },
+    { sessionId: 'running-2', cwd: '/data/ai/dsh/gitea_task_issues', running: true },
+  ])
+  harness.clock.ms += 60_000
+  const summary = await harness.watch.tickNow()
+
+  // 2 < 3 → 第一条投出去；投完本轮已经 +1（list() 对新会话有滞后），第二条就被挡下。
+  assert.equal(summary.delivered, 1)
+  assert.equal(summary.capped, 1)
+
+  const ledger = await harness.watchStore.snapshot()
+  // 基线那轮零投递，所以账本里总共只有本轮这一条 prompted。
+  assert.equal(ledger.deliveries.filter((row) => row.outcome === 'prompted').length, 1)
+  const capped = ledger.deliveries.find((row) => row.outcome === 'capped')
+  assert.equal(capped.limit, 3)
+  assert.equal(capped.active, 3, '本轮已经开出去的那个也要算进活跃数')
 })
 
 test('子代理会话不算「工作区在忙」', async () => {

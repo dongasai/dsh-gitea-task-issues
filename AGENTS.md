@@ -18,7 +18,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（112 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（115 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -44,7 +44,7 @@
 | [lib/triggers.js](lib/triggers.js) | **纯函数**：账本 + issues + 评论 → 触发（矩阵的主战场） |
 | [lib/watchstore.js](lib/watchstore.js) | 自动分配账本 `watch.json`：schema、收敛、剪枝 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 112 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 115 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 | [docs/auto-assign-design.md](docs/auto-assign-design.md) | 自动分配的设计稿：口径、账本、幂等闸门、边界 |
@@ -145,6 +145,13 @@
     并禁用；名册缺席（`available: false`）退回手填 id，**不要**在界面里写死预设清单，也不要因为
     拿不到名册把面板拖垮。存的值不在名册里时补一项「不在当前名册」保留现值 —— 否则下拉会显示成
     默认档，用户一保存就把配置悄悄改掉。
+26. **投递前的「同项目活跃会话上限」只数正在跑 turn 的普通会话**（`activeSessions`：`running`、
+    `cwd === 工作区根`、`origin !== 'subagent'`），默认 1（也就是旧行为「工作区忙」）；上限字段
+    是 `maxActiveSessions`（1..20，`lib/watchstore.js` 的 `MAX_ACTIVE_SESSIONS_CEILING`）。
+    到上限记 `capped`（带 `active` / `limit`）并**保留待办**，别改成 `failed` 或写 `fired`；
+    `summary.busy` 仍把 capped 算进去（旧调用方只看这一个数），另有 `summary.capped` 细分。
+    判断时除了 `list()` 还要加**本轮已投出计数**（`openedThisTick`）：`list()` 对新会话的
+    `running` 有滞后，只靠它数会在同一轮里连开好几个、把上限一次冲穿（有探针钉着）。
 
 ## 代码风格
 
@@ -194,6 +201,10 @@ node --check index.js && node --check client.js
 - **动全局看板的「列表范围」**（取哪些仓库、去重口径、范围提示）→ 同步 README 的
   「界面长什么样 · 全局看板」、「只能在浏览器里看的」第 13 条与 [IMPLEMENTATION.md](IMPLEMENTATION.md)
   的「全局看板列表：范围由绑定决定」一节；`tests/client.test.mjs` 里那四条范围用例跟着改。
+- **动「同项目活跃会话上限」**（判据、默认值、结果码 `capped`、面板字段）→ 同步 README 的
+  「自动分配任务 · 同项目活跃会话上限」、验收清单第 18 条与「已知边界」，
+  [IMPLEMENTATION.md](IMPLEMENTATION.md) 的「同项目活跃会话上限」一节；`tests/watch.test.mjs`
+  里那两条上限用例跟着改。
 - **动自动分配「模式」（Agent 预设）**（名册来源、选项文案、坏行/缺失处理）→ 同步 README 的
   「自动分配任务 · 怎么开」、「线上协议」的 `presets.list` 行、「只能在浏览器里看的」第 18 条与
   [IMPLEMENTATION.md](IMPLEMENTATION.md) 的「模式」一节；`tests/client.test.mjs` 里那三条模式用例

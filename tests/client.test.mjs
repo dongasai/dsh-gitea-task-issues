@@ -963,6 +963,7 @@ test('自动分配：保存本工作区配置会打 watch.set 的 root 分支，
   assert.ok(set, '保存必须打 watch.set')
   assert.equal(set.params.rootConfig.triggers.newComment, false)
   assert.equal(set.params.rootConfig.cooldownSeconds, 600)
+  assert.equal(set.params.rootConfig.maxActiveSessions, 1, '同项目活跃会话上限默认 1（旧行为）')
   // 目标仓库只能由绑定解析：界面不许指定。
   assert.equal(set.params.serverId, undefined)
   assert.equal(set.params.owner, undefined)
@@ -1039,6 +1040,46 @@ test('自动分配：账本里存的预设已不在当前名册时也要显示�
     assert.match(ghost.props.children, /不在当前名册/)
   } finally {
     FIXTURES.watch.roots = savedRoots
+  }
+})
+
+test('自动分配：可调「同项目活跃会话上限」，保存进 rootConfig', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  await openAutoPanel(mini, WorkspaceBoard)
+
+  const input = findNodes(mini, (node) => node.props?.['data-gti-watch-maxactive'] === 'true')[0]
+  assert.ok(input, '面板要有「同项目活跃会话上限」输入框')
+  assert.equal(input.props.value, 1, '默认 1：有人在跑就不再开新的')
+  assert.ok(findNodes(mini, (node) => node.props?.['data-gti-maxactive-hint'] === 'true').length > 0,
+    '这个数会改变投递行为，必须有一句解释')
+
+  input.props.onChange({ target: { value: '3' } })
+  await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+  calls.length = 0
+  await findNodes(mini, (node) => node.props?.['data-gti-watch-save'] === 'true')[0].props.onClick()
+  await flush()
+  const set = calls.find((call) => call.op === 'watch.set')
+  assert.equal(set.params.rootConfig.maxActiveSessions, 3)
+})
+
+test('自动分配：被活跃会话上限挡下的投递记录能读出上限数字', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const saved = FIXTURES.watch.deliveries
+  try {
+    FIXTURES.watch.deliveries = [{
+      at: '2026-10-25T09:00:00.000Z', key: 'srv-a/dongasai/mylike#7', root: '/work/mylike',
+      index: 7, title: '被挡下的任务', kinds: ['newAssigned'],
+      outcome: 'capped', reason: 'active', active: 3, limit: 3,
+    }]
+    const paint = await openAutoPanel(mini, WorkspaceBoard)
+    const text = await paint()
+    assert.match(text, /同项目活跃会话已达上限（3）/, '要说清是哪条闸门挡的、上限是多少')
+    assert.doesNotMatch(text, /\(active\)/, '内部 reason 不该直接摊给用户看')
+    assert.match(text, /被挡下的任务/)
+  } finally {
+    FIXTURES.watch.deliveries = saved
   }
 })
 

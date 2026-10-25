@@ -161,6 +161,8 @@ await ctx.sessionController.prompt(
 )
 
 // 判忙：list 收一个（保留的）请求对象，返回 { items }，不是裸数组
+// 2026-10-25 起：判「忙」升级为可配置的「同项目活跃会话上限」（maxActiveSessions，默认 1
+// 即原行为；1..20），到上限记 capped 且保留待办。见 lib/watch.js 的 activeSessions()。
 const { items } = await ctx.sessionController.list({}, signal)
 ```
 

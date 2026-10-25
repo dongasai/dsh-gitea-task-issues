@@ -763,8 +763,13 @@ test('watch.set：只接受 global / root + rootConfig，且仓库由绑定解�
   assert.equal(set.roots[world.workspace].triggers.newComment, false)
   assert.equal(set.roots[world.workspace].triggers.newAssigned, true, '没给的开关保持默认')
   assert.equal(set.roots[world.workspace].cooldownSeconds, 120)
+  // 同项目活跃会话上限：默认 1（旧行为），可以调大；越界在另一条用例里验 400。
+  assert.equal(set.roots[world.workspace].maxActiveSessions, 1)
   // 仓库来自绑定，不是调用方给的。
   assert.equal(set.roots[world.workspace].repo, 'mylike')
+
+  const raised = await ok('watch.set', { root: world.workspace, rootConfig: { maxActiveSessions: 3 } })
+  assert.equal(raised.roots[world.workspace].maxActiveSessions, 3)
 
   // global 局部更新
   const globalNext = await ok('watch.set', { global: { intervalSeconds: 300, maxSessionsPerHour: 3 } })
@@ -791,6 +796,8 @@ test('watch.set：参数越界一律 400，不把脏配置写进去', async () =
     { global: { maxSessionsPerHour: 0 } },
     { global: { enabled: 'yes' } },
     { root: world.workspace, rootConfig: { cooldownSeconds: -1 } },
+    { root: world.workspace, rootConfig: { maxActiveSessions: 0 } },
+    { root: world.workspace, rootConfig: { maxActiveSessions: 21 } },
     { root: world.workspace, rootConfig: { triggers: { newAssigned: 'x' } } },
     {},
   ]) {
