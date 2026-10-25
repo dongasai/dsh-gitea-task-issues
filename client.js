@@ -269,7 +269,18 @@ window.__ModuleLoader__.load({
       'auto.cooldown': '同一 issue 冷却（秒）',
       'auto.daily': '单 issue 每日上限',
       'auto.giveUp': '等待上限（小时）',
-      'auto.preset': 'Agent 预设（留空用宿主默认）',
+      'auto.preset': '模式（Agent 预设）',
+      'auto.presetHint': '自动打开的新会话用这个模式；「跟随宿主默认」等于 DSH 里设的默认模式。',
+      'auto.presetNoRoster': '宿主没有提供预设名册，只能手填预设 id（留空也就是默认模式）。',
+      'auto.presetFollow': '跟随宿主默认（{name}）',
+      'auto.presetFollowUnnamed': '跟随宿主默认',
+      'auto.presetMissing': '{id}（不在当前名册）',
+      'auto.presetBroken': '{name}（加载失败）',
+      // 内置预设不发布 name，界面按 id 查这几条（与 DSH 自带文案一致）。
+      'preset.standard': '标准模式',
+      'preset.ptc': 'PTC 模式',
+      'preset.minimal': '极简模式',
+      'preset.cordis': '创造模式',
       'auto.save': '保存设置',
       'auto.tick': '立即检查一次',
       'auto.ticking': '检查中…',
@@ -528,7 +539,17 @@ window.__ModuleLoader__.load({
       'auto.cooldown': 'Cooldown per issue (seconds)',
       'auto.daily': 'Daily cap per issue',
       'auto.giveUp': 'Give up after (hours)',
-      'auto.preset': 'Agent preset (empty uses host default)',
+      'auto.preset': 'Mode (agent preset)',
+      'auto.presetHint': 'Sessions opened automatically use this mode; "follow the host default" equals the default mode set in DSH.',
+      'auto.presetNoRoster': 'This host provides no preset roster; type a preset id (empty also means the default mode).',
+      'auto.presetFollow': 'Follow host default ({name})',
+      'auto.presetFollowUnnamed': 'Follow host default',
+      'auto.presetMissing': '{id} (not in the current roster)',
+      'auto.presetBroken': '{name} (failed to load)',
+      'preset.standard': 'Standard mode',
+      'preset.ptc': 'PTC mode',
+      'preset.minimal': 'Minimal mode',
+      'preset.cordis': 'Creator mode',
       'auto.save': 'Save',
       'auto.tick': 'Check now',
       'auto.ticking': 'Checking…',
@@ -814,6 +835,7 @@ window.__ModuleLoader__.load({
         repos: (serverId, q) => callBridge('repo.list', { serverId, q }),
         repoMeta: (params) => callBridge('repo.meta', params),
         issueDetail: (params) => callBridge('issue.detail', params),
+        presets: () => callBridge('presets.list'),
         autoGet: () => callBridge('watch.get'),
         autoSet: (params) => callBridge('watch.set', params),
         autoTick: () => callBridge('watch.tick'),
@@ -2025,12 +2047,46 @@ window.__ModuleLoader__.load({
      *
      * @param props - `api` / `t` / `sessionId` / `binding` / `onChanged`。
      */
+    /** 内置预设 id → 文案键。宿主不发布内置预设的 name（自定义预设才有），界面自己查。 */
+    const BUILT_IN_PRESET_KEYS = {
+      standard: 'preset.standard',
+      ptc: 'preset.ptc',
+      minimal: 'preset.minimal',
+      cordis: 'preset.cordis',
+    }
+
+    /**
+     * 预设的显示名：宿主给了 name 就用它（自定义预设是用户写的，不该被翻译）；没给就按 id 查
+     * 内置文案；都不认识就退回 id —— 绝不渲染 `undefined`。
+     * @param preset - 名册里的一行 `{ id, name }`。
+     * @param t - 文案函数。
+     * @returns 显示名。
+     */
+    function presetName(preset, t) {
+      if (typeof preset?.name === 'string' && preset.name !== '') return preset.name
+      const key = BUILT_IN_PRESET_KEYS[preset?.id]
+      return key === undefined ? String(preset?.id ?? '') : t(key)
+    }
+
     function AutoAssignPanel({ api, t, sessionId, binding, onChanged }) {
       const [state, setState] = React.useState(null)
       const [error, setError] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
       const [notice, setNotice] = React.useState(null)
       const [draft, setDraft] = React.useState(null)
+      /**
+       * Agent 预设名册（「模式」下拉的选项）。宿主没挂名册服务时保持 null，界面退回手填 id ——
+       * 这是可选服务，不能因为它缺席把整块自动分配面板拖垮（同「依赖是软的」那条约束）。
+       */
+      const [roster, setRoster] = React.useState(null)
+
+      React.useEffect(() => {
+        let alive = true
+        void api.presets().then((result) => {
+          if (alive && result.ok) setRoster(result.data ?? null)
+        })
+        return () => { alive = false }
+      }, [api])
 
       const load = React.useCallback(async () => {
         const result = await api.autoGet()
@@ -2070,6 +2126,17 @@ window.__ModuleLoader__.load({
 
       const effective = binding?.effective ?? null
       if (effective === null) return h('div', { className: 'dsh-gti-scroll' }, h(Banner, { tone: 'warn', text: t('auto.needBinding') }))
+
+      // 空名册等价于「没有名册」：只剩「跟随宿主默认」一项的下来框没法选自定义 id，不如给手填。
+      const rosterPresets = roster?.available === true && Array.isArray(roster.presets) && roster.presets.length > 0
+        ? roster.presets
+        : null
+      const defaultPreset = rosterPresets === null ? null : (rosterPresets.find((preset) => preset.isDefault === true) ?? null)
+      const knownPresetIds = new Set((rosterPresets ?? []).map((preset) => preset.id))
+      // 账本里存的预设可能已经被删 / 改名：留一个选项显示它，别让下拉悄悄改成「默认」再被保存回去。
+      const missingPreset = rosterPresets !== null && draft.agentPreset !== '' && !knownPresetIds.has(draft.agentPreset)
+        ? draft.agentPreset
+        : null
 
       const status = state.status
       const pending = state.pending ?? []
@@ -2268,13 +2335,36 @@ window.__ModuleLoader__.load({
             })),
           h('div', { className: 'dsh-gti-field' },
             h('label', { className: 'dsh-gti-field-label' }, t('auto.preset')),
-            h('input', {
-              className: 'dsh-gti-input',
-              placeholder: 'default',
-              value: draft.agentPreset,
-              'data-gti-watch-preset': 'true',
-              onChange: (event) => setDraft({ ...draft, agentPreset: event.target.value }),
-            })),
+            // 有名册就选（这正是用户要的「能选模式」）；没有就退回手填 id，不留一个空下拉。
+            rosterPresets === null
+              ? h('input', {
+                className: 'dsh-gti-input',
+                placeholder: 'default',
+                value: draft.agentPreset,
+                'data-gti-watch-preset': 'manual',
+                onChange: (event) => setDraft({ ...draft, agentPreset: event.target.value }),
+              })
+              : h('select', {
+                className: 'dsh-gti-select',
+                value: draft.agentPreset,
+                'data-gti-watch-preset': 'roster',
+                onChange: (event) => setDraft({ ...draft, agentPreset: event.target.value }),
+              }, [h('option', { key: '', value: '' },
+                defaultPreset === null
+                  ? t('auto.presetFollowUnnamed')
+                  : t('auto.presetFollow', { name: presetName(defaultPreset, t) }))]
+                .concat(rosterPresets.map((preset) => h('option', {
+                  key: preset.id,
+                  value: preset.id,
+                  disabled: preset.broken !== null && preset.broken !== undefined,
+                }, preset.broken === null || preset.broken === undefined
+                  ? presetName(preset, t)
+                  : t('auto.presetBroken', { name: presetName(preset, t) }))))
+                .concat(missingPreset === null
+                  ? []
+                  : [h('option', { key: missingPreset, value: missingPreset }, t('auto.presetMissing', { id: missingPreset }))])),
+            h('p', { className: 'dsh-gti-note', 'data-gti-preset-hint': 'true' },
+              rosterPresets === null ? t('auto.presetNoRoster') : t('auto.presetHint'))),
           h('div', { className: 'dsh-gti-actions' },
             h('button', {
               type: 'button',

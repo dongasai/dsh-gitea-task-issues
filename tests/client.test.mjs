@@ -969,6 +969,79 @@ test('自动分配：保存本工作区配置会打 watch.set 的 root 分支，
   assert.equal(set.params.repo, undefined)
 })
 
+test('自动分配：有预设名册时用下拉选「模式」，保存的是预设 id', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  await openAutoPanel(mini, WorkspaceBoard)
+
+  const picker = findNodes(mini, (node) => node.props?.['data-gti-watch-preset'] === 'roster')[0]
+  assert.ok(picker, '有名册时必须渲染成下拉（用户要的「能选模式」）')
+  assert.equal(picker.props.value, '', '默认档是「跟随宿主默认」')
+  const options = picker.props.children
+  assert.deepEqual(options.map((option) => option.props.value), ['', 'standard', 'ptc', 'minimal', 'cordis'])
+  // 默认档要把宿主默认模式的名字写出来，否则「跟随默认」等于没说。
+  assert.match(options[0].props.children, /跟随宿主默认（标准模式）/)
+  assert.equal(options[1].props.children, '标准模式', '内置预设按 id 查本地文案（宿主不发布 name）')
+  assert.equal(options[2].props.children, 'PTC mode', '自定义预设用宿主给的 name')
+  assert.equal(options[4].props.disabled, true, '加载失败的预设不能选')
+  assert.match(options[4].props.children, /加载失败/)
+
+  // 选 PTC 模式 → 保存 → rootConfig 里必须是预设 id，开会话就按它走。
+  picker.props.onChange({ target: { value: 'ptc' } })
+  await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+  calls.length = 0
+  await findNodes(mini, (node) => node.props?.['data-gti-watch-save'] === 'true')[0].props.onClick()
+  await flush()
+  const set = calls.find((call) => call.op === 'watch.set')
+  assert.ok(set, '保存必须打 watch.set')
+  assert.equal(set.params.rootConfig.agentPreset, 'ptc')
+})
+
+test('自动分配：宿主没有预设名册时退回手填 id（面板不白屏）', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const saved = FIXTURES.presets
+  try {
+    FIXTURES.presets = { available: false, defaultId: null, presets: [] }
+    await openAutoPanel(mini, WorkspaceBoard)
+
+    const manual = findNodes(mini, (node) => node.props?.['data-gti-watch-preset'] === 'manual')[0]
+    assert.ok(manual, '没有名册就退回手填 id')
+    const text = await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    assert.match(text, /手填预设 id/)
+
+    manual.props.onChange({ target: { value: 'team-mode' } })
+    await mini.render(mini.React.createElement(WorkspaceBoard, { sessionId: 'session-1' }))
+    calls.length = 0
+    await findNodes(mini, (node) => node.props?.['data-gti-watch-save'] === 'true')[0].props.onClick()
+    await flush()
+    assert.equal(calls.find((call) => call.op === 'watch.set').params.rootConfig.agentPreset, 'team-mode')
+  } finally {
+    FIXTURES.presets = saved
+  }
+})
+
+test('自动分配：账本里存的预设已不在当前名册时也要显示出来，不能被悄悄改回默认', async () => {
+  const { fake, mini } = await newWorld()
+  const WorkspaceBoard = fake.slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab').component
+  const savedRoots = FIXTURES.watch.roots
+  try {
+    FIXTURES.watch.roots = {
+      ...savedRoots,
+      '/work/mylike': { ...savedRoots['/work/mylike'], agentPreset: 'ghost-mode' },
+    }
+    await openAutoPanel(mini, WorkspaceBoard)
+
+    const picker = findNodes(mini, (node) => node.props?.['data-gti-watch-preset'] === 'roster')[0]
+    assert.equal(picker.props.value, 'ghost-mode', '当前值必须保持，不能被下拉重置成默认档')
+    const ghost = picker.props.children.find((option) => option.props.value === 'ghost-mode')
+    assert.ok(ghost, '缺的那一项要补进选项，否则下拉显示的和账本里的对不上')
+    assert.match(ghost.props.children, /不在当前名册/)
+  } finally {
+    FIXTURES.watch.roots = savedRoots
+  }
+})
+
 test('自动分配：宿主没有会话服务时亮横幅，而不是白屏', async () => {
   const { fake, mini } = await newWorld()
   FIXTURES.watch.status = { ...FIXTURES.watch.status, serviceAvailable: false }

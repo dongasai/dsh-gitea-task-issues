@@ -77,6 +77,18 @@ export const FIXTURES = {
   },
   repos: [{ serverId: 'srv-a', owner: 'dongasai', repo: 'mylike', fullName: 'dongasai/mylike', private: false, hasIssues: true, htmlUrl: null, updatedAt: null, defaultBranch: 'main' }],
   probe: { ok: true, authenticated: true, version: '1.27.3', user: { login: 'tester', name: 'Tester', avatarUrl: null }, tokenSource: 'record' },
+  // Agent 预设名册（自动分配面板的「模式」下拉）。内置预设不发布 name，由界面按 id 查文案；
+  // cordis 故意标成加载失败，用来验「坏行禁用」。
+  presets: {
+    available: true,
+    defaultId: 'standard',
+    presets: [
+      { id: 'standard', name: null, description: null, isDefault: true, broken: null },
+      { id: 'ptc', name: 'PTC mode', description: '批量工具', isDefault: false, broken: null },
+      { id: 'minimal', name: null, description: null, isDefault: false, broken: null },
+      { id: 'cordis', name: null, description: null, isDefault: false, broken: 'activation failed' },
+    ],
+  },
   // 自动分配的账本快照：一条待投递 + 一条已投递，够渲染出两个列表。
   watch: {
     revision: 3,
@@ -123,6 +135,7 @@ export function bridgeAnswer(op, params) {
   calls.push({ op, params })
   if (op === 'config.get') return { ok: true, data: FIXTURES.config }
   if (op === 'binding.get') return { ok: true, data: FIXTURES.binding }
+  if (op === 'presets.list') return { ok: true, data: FIXTURES.presets }
   if (op === 'repo.list') return { ok: true, data: FIXTURES.repos }
   if (op === 'repo.meta') return { ok: true, data: FIXTURES.meta }
   if (op === 'issue.detail') return { ok: true, data: FIXTURES.detail }

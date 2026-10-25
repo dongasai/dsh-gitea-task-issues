@@ -81,7 +81,7 @@ function makeCredentials() {
 }
 
 /** 假 Host 上下文。 */
-function makeCtx({ cwd, credentials, rejection }) {
+function makeCtx({ cwd, credentials, rejection, presets }) {
   const tools = []
   const routes = []
   const effects = []
@@ -95,6 +95,8 @@ function makeCtx({ cwd, credentials, rejection }) {
     get(service) {
       if (service === 'credentials') return credentials
       if (service === 'sandboxPolicy') return { workspaceRoot: cwd }
+      // 预设名册用 getter 包一层：用例里可以把它临时摘掉，验「名册缺席」的降级路径。
+      if (service === 'agentPresets') return presets === undefined ? undefined : presets()
       return undefined
     },
     connection: { requestRejection: () => rejection },
@@ -264,7 +266,19 @@ before(async () => {
     `\turl = ${world.gitea.url}/dongasai/mylike.git`,
   ].join('\n'), 'utf8')
 
-  world.fake = makeCtx({ cwd: world.workspace, credentials: world.credentials })
+  // 假预设名册：内置预设不发布 name（界面按 id 查自己的文案），自定义预设自带 name。
+  world.presets = {
+    async remoteExportList() {
+      return {
+        presets: [
+          { id: 'standard', isDefault: true },
+          { id: 'ptc', name: 'PTC mode', description: 'batch tools' },
+          { id: 'minimal', broken: 'missing service' },
+        ],
+      }
+    },
+  }
+  world.fake = makeCtx({ cwd: world.workspace, credentials: world.credentials, presets: () => world.presets })
   apply(world.fake.ctx)
   world.route = world.fake.routes[0]
   world.tools = world.fake.tools
@@ -806,6 +820,29 @@ test('watch.requeue：没配置的工作区 / 没见过的 issue 都要明确报
   const noIssue = await call('watch.requeue', { root: world.workspace, index: 999 })
   assert.equal(noIssue.status, 404)
   assert.equal(noIssue.body.code, 'watch-issue-unknown')
+})
+
+test('presets.list：把宿主预设名册透给界面（自动分配选「模式」用）', async () => {
+  const data = await ok('presets.list')
+  assert.equal(data.available, true)
+  assert.equal(data.defaultId, 'standard', '标记 isDefault 的那条就是默认模式')
+  assert.deepEqual(data.presets.map((preset) => preset.id), ['standard', 'ptc', 'minimal'])
+  assert.equal(data.presets[0].name, null, '内置预设不发布 name，由界面按 id 查文案')
+  assert.equal(data.presets[1].name, 'PTC mode', '自定义预设的 name 原样透传')
+  assert.equal(data.presets[2].broken, 'missing service', '加载失败的预设要标出来，界面会禁用')
+  assert.equal(data.presets[1].isDefault, false)
+
+  // 没挂名册服务（headless / 精简组合）：明确回 available:false，界面退回手填 id。
+  const saved = world.presets
+  try {
+    world.presets = undefined
+    const degraded = await ok('presets.list')
+    assert.equal(degraded.available, false)
+    assert.deepEqual(degraded.presets, [])
+    assert.equal(degraded.defaultId, null)
+  } finally {
+    world.presets = saved
+  }
 })
 
 test('watch 的四个操作可用，且不接受 serverId/owner/repo 指定仓库', async () => {

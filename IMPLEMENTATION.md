@@ -371,6 +371,24 @@ Swagger 里**没有**任何 `limit` 的 `maximum`，实际上限来自 `GET /set
 先用 `workspaceRegistry.resolveByPath(root)` 拿到工作区记录，再 `create({ workspaceId })`，
 官方会额外 `attachSession`，会话就出现在该项目下。拿不到记录时才退回只给 `cwd`。
 
+### 模式（Agent 预设）：名册从宿主来，界面不写死
+
+自动分配开出来的会话原先固定落在「标准模式」。要能选模式，就得知道宿主有哪些预设 —— 那是
+profile 声明的东西（`agentPresets` 服务），浏览器半边没有任何渠道枚举它。所以加了一条
+`presets.list` 桥操作，把 `remoteExportList()` 的 roster 压成
+`{ id, name, description, isDefault, broken }` 透给界面；`rootConfig.agentPreset` 存的就是这里
+的 id，开会话时透传给 `sessionController.create({ agentPreset })`。
+
+四条是刻意的：
+
+1. **内置预设不发布 `name`**（standard / ptc / minimal / cordis），由本插件的字典按 id 查文案；
+   自定义预设自带 `name` / `description`，原样显示（用户写的东西不翻译）。两边都不认识就退回 id。
+2. **加载失败的预设标出来并禁用**（`broken`）：选了它只会让 `create` 失败，不如在下拉里就挡住。
+3. **名册缺席就退回手填 id**（`available: false`）：headless / 精简组合没有预设服务，界面不能
+   因为它缺席白屏（与「依赖是软的」同一条）。
+4. **账本里的预设已不在名册**（被删 / 改名）：补一个「不在当前名册」的选项保持现值 —— 否则下拉
+   会显示成默认档，用户一保存就把配置悄悄改掉了。
+
 ### 配置一改就重排：定时器不是配置的化身
 
 `setTimeout` 在 **arm 的那一刻**就把延迟算死了，而 `watch.set` 只写账本。于是旧实现里「把间隔
