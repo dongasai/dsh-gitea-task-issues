@@ -61,7 +61,7 @@ export const FIXTURES = {
       user: { login: 'tester' }, isPull: false, locked: false, pinned: false,
     },
     comments: [{ id: 5, body: '第一条评论', user: { login: 'tester' }, createdAt: '2026-10-02T03:00:00Z', updatedAt: null, htmlUrl: null, issueIndex: 12, assets: [] }],
-    assets: [{ id: 9, name: 'note.txt', size: 2048, uuid: 'u', downloadUrl: 'http://localhost/attachments/9', createdAt: '2026-10-02T03:00:00Z' }],
+    assets: [{ id: 9, name: 'note.txt', size: 2048, uuid: '148f63a9-5bfd-4b08-b85a-d996fc6cf47a', downloadUrl: 'http://localhost/attachments/9', createdAt: '2026-10-02T03:00:00Z' }],
     times: [{ id: 1, time: 3600, created: '2026-10-02T03:00:00Z', userName: 'tester' }],
     dependencies: [{ serverId: 'srv-a', owner: 'dongasai', repo: 'mylike', index: 3, title: '依赖的 issue', state: 'open', labels: [], assignees: [], milestone: null, dueDate: null, comments: 0, createdAt: null, updatedAt: null, closedAt: null, htmlUrl: null, user: null, isPull: false, locked: false, pinned: false }],
     blocks: [],
@@ -160,6 +160,11 @@ export function bridgeAnswer(op, params) {
     if (inner === 'issue.labels.set') return { ok: true, data: FIXTURES.meta.labels }
     if (inner === 'issue.comments.create') return { ok: true, data: FIXTURES.detail.comments[0] }
     if (inner === 'issue.times.add') return { ok: true, data: FIXTURES.detail.times[0] }
+    if (inner === 'attachment.content') {
+      // 旧 Host 没有这个 op：界面要退化成「重启 Harness」提示，而不是破图。
+      if (FIXTURES.failAttachment === true) return { ok: false, code: 'unknown-operation', message: 'unknown operation "attachment.content"' }
+      return { ok: true, data: { base64: 'iVBORw0KGgo=', contentType: 'image/png', size: 8 } }
+    }
     if (inner === 'issue.assets.upload') {
       // 一次性失败开关：验「issue 已创建、图片没传上去」这条半成功路径（不重复建 issue）。
       if (FIXTURES.failUploadOnce === true) {

@@ -259,6 +259,29 @@ Gitea 网页版看起来「创建前就能传图」，靠的是两条别的东�
 - **半成功要看得见**：新建时 issue 已经建出来而图片失败了，必须停在表单页并点名编号 —— 否则
   用户再点一次创建就是一条重复 issue；`tests/client.test.mjs` 里那条用例钉着这个分支。
 
+### 图片为什么要 Host 代取（`attachment.content`）
+
+第一版只把 `![名](/attachments/{uuid})` 写进正文，用户点开详情看到还是一段 markdown ——「这上传的
+图片也没法看啊」（2026-10-31 实报）。面板要真显示图片，绕不开两个事实：
+
+1. Gitea **没有下载附件内容的 API**：`GET …/assets/{id}` 只回元数据；正文引用图片靠的是 web 路由
+   `GET {baseUrl}/attachments/{uuid}`。
+2. 这条 web 路由对匿名是 404（私有仓库），对**令牌**是 200 `image/png`（本机实测，2026-10-31）。
+   而浏览器里的 `<img>` 跨站子资源不会带上 DSH 页面的任何凭据，也拿不到令牌 —— 直接写
+   `<img src="https://gitea/attachments/uuid">` 只会是破图。
+
+所以加了一条 `attachment.content`：桥用令牌把字节取回来，返回 `{ base64, contentType, size }`，
+浏览器转成 data URL 渲染。它是操作表里唯一 `base: 'root'`（不走 `/api/v1`）且 `raw: true`
+（响应不是 JSON）的操作；uuid 在入口按 `xxxxxxxx-xxxx-…` 收敛，别把任意字符串拼进 web 路径。
+
+三条边界：
+
+- **单张上限 10 MiB**：再大的图转 data URL 只会把界面拖死，退化成「去 Gitea 看」更诚实。
+- **刚上传的图不必走代理**：上传时字节本来就在手里（base64 过桥），顺手存一份 data URL 进内存
+  缓存，表单预览与「保存后立刻打开详情」都能马上出图；代理只负责「重开页面后的老图」。
+- **只认图片这一种 markdown**：面板不是 markdown 渲染器，标题 / 列表 / 代码块照旧按纯文本。
+  拉不到图时显示**可见的**说明（`title` 悬停不算），旧 Host 下点明「重启 Harness」。
+
 ## 分页与上限
 
 Swagger 里**没有**任何 `limit` 的 `maximum`，实际上限来自 `GET /settings/api` 的

@@ -18,7 +18,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（121 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（125 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -44,7 +44,7 @@
 | [lib/triggers.js](lib/triggers.js) | **纯函数**：账本 + issues + 评论 → 触发（矩阵的主战场） |
 | [lib/watchstore.js](lib/watchstore.js) | 自动分配账本 `watch.json`：schema、收敛、剪枝 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 121 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 125 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 | [docs/auto-assign-design.md](docs/auto-assign-design.md) | 自动分配的设计稿：口径、账本、幂等闸门、边界 |
@@ -162,6 +162,13 @@
     追加到正文末尾。新建时图片失败要停在表单页写明「issue 已创建」，别放用户再点一次创建；
     评论贴图借用 issue 附件端点（评论还没 id），删 issue 附件会让评论图失效 —— 这两条已写进
     README「已知边界」，别当成 bug 改回去。
+28. **图片内嵌必须由 Host 代取字节**（`attachment.content`，操作表里唯一 `base: 'root'`、
+    `raw: true` 的操作）：web 路由 `GET {baseUrl}/attachments/{uuid}` 带令牌可用，匿名 404
+    （本机实测），浏览器 `<img>` 跨站拿不到会话。客户端把 base64 转 data URL 渲染，**缓存只在
+    内存**；刚上传的图在上传时就写进缓存（上传成功路径里 `ATTACHMENT_CACHE.set`），别退回去
+    让每张图都等代理往返。面板**只渲染图片这一种 markdown**，别顺手写成一个半吊子 markdown
+    渲染器；拉不到图（旧 Host `unknown-operation` / >10 MiB / 403）要显示**可见的**说明，
+    不能留破图，`title` 不算（悬停才看得到）。
 
 ## 代码风格
 
@@ -225,9 +232,10 @@ node --check index.js && node --check client.js
 - **动「发送到 DSH」**（提示词格式、入口位置、失败横幅）→ 同步 README 的「界面长什么样」、
   「只能在浏览器里看的」第 15 条与「已知边界」，以及 [IMPLEMENTATION.md](IMPLEMENTATION.md)
   的「发送到 DSH」一节；`tests/client.test.mjs` 里那四条用例跟着改。
-- **动「正文贴图」**（上传时机、插入位置、图片 markdown、附件归属、失败态文案）→ 同步 README 的
-  「界面长什么样」、「只能在浏览器里看的」第 21 条与「已知边界」，[IMPLEMENTATION.md](IMPLEMENTATION.md)
-  的「正文贴图」一节；`tests/client.test.mjs` 里那五条贴图用例跟着改。
+- **动「正文贴图 / 图片内嵌」**（上传时机、插入位置、图片 markdown、附件归属、代取策略、失败态
+  文案）→ 同步 README 的「界面长什么样」、「线上协议」、`too-large`、「只能在浏览器里看的」第 21 条
+  与「已知边界」，[IMPLEMENTATION.md](IMPLEMENTATION.md) 的「正文贴图」与「图片为什么要 Host 代取」
+  两节；`tests/client.test.mjs` 里那八条、`tests/host.test.mjs` 里那条附件字节用例跟着改。
 - **改文案键** → `zh` 与 `en` 一起改（探针会拦）。
 - **已知边界**写在 README 末尾；**没真正解决之前不要从文档里删掉**。
 

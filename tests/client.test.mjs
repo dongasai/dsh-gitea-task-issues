@@ -1207,14 +1207,14 @@ test('编辑 issue：粘贴图片立刻上传，markdown 插在光标处并随�
   assert.equal(upload.params.params.filename, 'shot.png')
 
   const updated = findNode(mini, (node) => node.props?.['data-gti-form-body'] !== undefined)
-  assert.equal(updated.props.value, '![shot.png](/attachments/u)正文内容', 'markdown 应插在光标（开头）处')
+  assert.equal(updated.props.value, '![shot.png](/attachments/148f63a9-5bfd-4b08-b85a-d996fc6cf47a)正文内容', 'markdown 应插在光标（开头）处')
 
   findNode(mini, (node) => node.props?.['data-gti-form-submit'] === 'true').props.onClick()
   await flush()
   await mini.render(mini.React.createElement(GlobalBoard, {}))
   const saved = calls.find((call) => call.op === 'gitea.call' && call.params.op === 'issue.edit')
   assert.ok(saved, '保存没有发出 issue.edit')
-  assert.equal(saved.params.params.body, '![shot.png](/attachments/u)正文内容')
+  assert.equal(saved.params.params.body, '![shot.png](/attachments/148f63a9-5bfd-4b08-b85a-d996fc6cf47a)正文内容')
 })
 
 test('新建 issue：图片先攒着，创建成功后上传并追加到正文末尾', async () => {
@@ -1249,7 +1249,7 @@ test('新建 issue：图片先攒着，创建成功后上传并追加到正文�
     .map((call) => call.params.op)
   assert.deepEqual(ops, ['issue.create', 'issue.assets.upload', 'issue.edit'], `顺序必须是先建再传后补正文：${JSON.stringify(ops)}`)
   const patched = calls.find((call) => call.params?.op === 'issue.edit')
-  assert.equal(patched.params.params.body, '![shot.png](/attachments/u)', '图片 markdown 要追加进正文')
+  assert.equal(patched.params.params.body, '![shot.png](/attachments/148f63a9-5bfd-4b08-b85a-d996fc6cf47a)', '图片 markdown 要追加进正文')
 })
 
 test('评论框：粘贴图片立刻上传并把 markdown 写进草稿，发表时正文已完整', async () => {
@@ -1269,14 +1269,14 @@ test('评论框：粘贴图片立刻上传并把 markdown 写进草稿，发表�
   const upload = calls.find((call) => call.op === 'gitea.call' && call.params.op === 'issue.assets.upload')
   assert.ok(upload, '评论框贴图没有上传')
   const next = findNode(mini, (node) => node.props?.['data-gti-comment-draft'] !== undefined)
-  assert.equal(next.props.value, '![shot.png](/attachments/u)', 'markdown 应写进草稿')
+  assert.equal(next.props.value, '![shot.png](/attachments/148f63a9-5bfd-4b08-b85a-d996fc6cf47a)', 'markdown 应写进草稿')
 
   findNode(mini, (node) => node.props?.['data-gti-comment-submit'] === 'true').props.onClick()
   await flush()
   await mini.render(mini.React.createElement(GlobalBoard, {}))
   const comment = calls.find((call) => call.params?.op === 'issue.comments.create')
   assert.ok(comment, '没有发出发表评论请求')
-  assert.equal(comment.params.params.body, '![shot.png](/attachments/u)')
+  assert.equal(comment.params.params.body, '![shot.png](/attachments/148f63a9-5bfd-4b08-b85a-d996fc6cf47a)')
 })
 
 test('贴图只认图片：文本文件不发上传，也不吞掉普通粘贴', async () => {
@@ -1337,5 +1337,81 @@ test('新建时图片上传失败：只建一次 issue，停在表单并给「�
     assert.equal(findNode(mini, (node) => node.props?.['data-gti-form-submit']), undefined, '点击后应离开表单')
   } finally {
     delete FIXTURES.failUploadOnce
+  }
+})
+
+// ── 图片内嵌：正文/评论渲染、编辑预览、旧 Host 降级 ─────────────────────────
+
+/** 两个合法 uuid：正文一个、评论一个。 */
+const IMG_A = '148f63a9-5bfd-4b08-b85a-d996fc6cf47a'
+const IMG_B = '7ccf7fb1-72d8-4f1b-9253-2740b462e0e9'
+
+test('详情：正文与评论里的图片 markdown 渲染成 <img>，不再只剩裸 markdown', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+  const savedBody = FIXTURES.detail.issue.body
+  const savedComment = FIXTURES.detail.comments[0].body
+  try {
+    FIXTURES.detail.issue.body = `看这张 ![正文图](/attachments/${IMG_A})`
+    FIXTURES.detail.comments[0].body = `评论里的图 ![评论图](/attachments/${IMG_B})`
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+    findNode(mini, (node) => typeof node.props?.['data-gti-issue'] === 'string').props.onClick(FIXTURES.issues[0])
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+    await flush()
+    const text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+
+    const images = mini.nodes.filter((node) => node.type === 'img' && String(node.props?.className).includes('dsh-gti-inline-image'))
+    assert.equal(images.length, 2, `正文与评论各应有一张图，实际 ${images.length}`)
+    assert.deepEqual(images.map((node) => node.props['data-gti-inline-image']), [IMG_A, IMG_B])
+    for (const image of images) {
+      assert.match(String(image.props.src), /^data:image\/png;base64,/, '图片必须用 Host 代取来的 data URL')
+    }
+    assert.doesNotMatch(text, /!\[正文图\]/, '渲染成图之后不该再显示裸 markdown')
+    assert.ok(calls.some((call) => call.params?.op === 'attachment.content' && call.params.params.uuid === IMG_A),
+      '正文里的附件图应当走 Host 代取')
+  } finally {
+    FIXTURES.detail.issue.body = savedBody
+    FIXTURES.detail.comments[0].body = savedComment
+  }
+})
+
+test('编辑表单：贴进来的图片立刻出缩略预览（不再只看到一段 markdown）', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => typeof node.props?.['data-gti-issue'] === 'string').props.onClick(FIXTURES.issues[0])
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => node.props?.['data-gti-edit'] === 'true').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const body = findNode(mini, (node) => node.props?.['data-gti-form-body'] !== undefined)
+
+  calls.length = 0
+  body.props.onPaste(fileEvent(imageFile()))
+  await flush()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const previews = mini.nodes.filter((node) => node.type === 'img' && String(node.props?.className).includes('dsh-gti-image-preview'))
+  assert.equal(previews.length, 1, '上传成功后表单里应有缩略图预览')
+  assert.match(String(previews[0].props.src), /^data:image\/png;base64,/, '预览直接用上传时的字节，不必等 Host 代理')
+  assert.ok(calls.every((call) => call.params?.op !== 'attachment.content'), '刚上传的图不该再走一遍 Host 代取')
+})
+
+test('旧 Host 没有附件代理：正文图片位退化成「重启 Harness」说明，不留破图', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+  const savedBody = FIXTURES.detail.issue.body
+  try {
+    FIXTURES.detail.issue.body = `图 ![正文图](/attachments/${IMG_A})`
+    FIXTURES.failAttachment = true
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+    findNode(mini, (node) => typeof node.props?.['data-gti-issue'] === 'string').props.onClick(FIXTURES.issues[0])
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+    await flush()
+    const text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+    assert.match(text, /重启 Harness/, '旧 Host 下必须点出「重启 Harness」，而不是默默显示破图')
+    assert.equal(mini.nodes.filter((node) => node.type === 'img').length, 0, '拉不到图时不该渲染 <img>')
+  } finally {
+    FIXTURES.detail.issue.body = savedBody
+    delete FIXTURES.failAttachment
   }
 })

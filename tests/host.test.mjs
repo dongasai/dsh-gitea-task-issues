@@ -23,7 +23,7 @@ import { BridgeError } from '../lib/errors.js'
 import { resolveLabelIds } from '../lib/gitea.js'
 import { ConfigStore, emptyState, makeServerId, normalizeBaseUrl, parseRepoSpec, storeFile } from '../lib/store.js'
 import { shapeComment, shapeIssue, shapeRepo, shapeTime } from '../lib/shape.js'
-import { startMockGitea, TEST_TOKEN } from './mock-gitea.mjs'
+import { ATTACHMENT_BYTES, ATTACHMENT_UUID, startMockGitea, TEST_TOKEN } from './mock-gitea.mjs'
 
 /** 假会话 id。 */
 const SESSION_ID = 'session-test'
@@ -490,6 +490,28 @@ test('issue：编辑、状态、截止日、标签替换、指派增删', async 
   const closed = await ok('gitea.call', { sessionId: SESSION_ID, op: 'issue.edit', params: { index: world.issueIndex, state: 'closed' } })
   assert.equal(closed.state, 'closed')
   await ok('gitea.call', { sessionId: SESSION_ID, op: 'issue.edit', params: { index: world.issueIndex, state: 'open' } })
+})
+
+test('附件字节：`/attachments/{uuid}` 由 Host 代取（web 路由 + 令牌），返回 base64', async () => {
+  const data = await ok('gitea.call', {
+    sessionId: SESSION_ID,
+    op: 'attachment.content',
+    params: { serverId: world.serverId, uuid: ATTACHMENT_UUID },
+  })
+  assert.match(String(data.contentType), /image\/png/, 'contentType 要原样带回来')
+  assert.equal(Buffer.from(data.base64, 'base64').toString('hex'), ATTACHMENT_BYTES.toString('hex'), 'base64 要能原样还原字节')
+  assert.equal(data.size, ATTACHMENT_BYTES.length)
+  const hit = world.gitea.requests.find((request) => request.path === `/attachments/${ATTACHMENT_UUID}`)
+  assert.ok(hit, '必须打 web 路由 `/attachments/{uuid}`（不是 /api/v1）')
+
+  // uuid 会被拼进 web 路由的路径段，形状不对一律 400，不能把 `../` 之类带去上游。
+  const bad = await call('gitea.call', {
+    sessionId: SESSION_ID,
+    op: 'attachment.content',
+    params: { serverId: world.serverId, uuid: '../../etc/passwd' },
+  })
+  assert.equal(bad.status, 400)
+  assert.equal(bad.body.code, 'bad-request')
 })
 
 test('评论：发表 → 列表 → 编辑', async () => {

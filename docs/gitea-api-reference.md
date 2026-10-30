@@ -275,6 +275,18 @@ issue 附件与评论附件是**两套并行**的路径；评论附件的路径�
 | `created_at` | string (date-time) | 创建时间 |
 | `download_count` | integer(int64) | 下载次数 |
 
+### 3.6 取附件**原始字节**（不在 `/api/v1` 下）
+
+API 没有「下载附件内容」的端点（`GET …/assets/{id}` 只回元数据），正文里引用图片靠的是 web 路由：
+
+| 方法 路径 | 用途 | 鉴权 | 实测（Gitea 1.27.3，2026-10-31） |
+| --- | --- | --- | --- |
+| `GET {baseUrl}/attachments/{uuid}` | 附件原始字节 | 登录会话；`Authorization: token <令牌>` 也可 | 带令牌 → `200 image/png`；匿名 → `404` |
+
+`browser_download_url` 就是这条地址（`{baseUrl}/attachments/{uuid}`）。私有仓库下浏览器直接
+`<img src=…>` 不会带令牌/会话（跨站子资源），所以插件让 Host 用令牌代取、转成 data URL 再渲染
+（见 README「已知边界」）。
+
 ---
 
 ## 4. 负责人 assignees

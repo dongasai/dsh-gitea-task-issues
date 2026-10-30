@@ -10,6 +10,10 @@ import { createServer } from 'node:http'
 /** 认的令牌。请求头必须是 `Authorization: token test-token`。 */
 export const TEST_TOKEN = 'test-token'
 
+/** 假附件的 uuid 与字节（一个 PNG 头，够断言 base64 往返）。 */
+export const ATTACHMENT_UUID = '148f63a9-5bfd-4b08-b85a-d996fc6cf47a'
+export const ATTACHMENT_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+
 /**
  * 起一个假 Gitea。
  * @returns `{ url, state, requests, close }`。
@@ -74,6 +78,15 @@ export async function startMockGitea() {
     }
 
     const route = async () => {
+      // 附件原始字节走的是**web 路由**（不在 /api/v1 下）：列表页内嵌图片时由 Host 代取。
+      if (url.pathname.startsWith('/attachments/')) {
+        const uuid = url.pathname.slice('/attachments/'.length)
+        if (uuid !== ATTACHMENT_UUID) return fail(404, 'Not Found')
+        res.statusCode = 200
+        res.setHeader('content-type', 'image/png')
+        res.end(ATTACHMENT_BYTES)
+        return
+      }
       const path = url.pathname.replace(/^\/api\/v1/, '')
       const segments = path.split('/').filter((part) => part !== '')
 

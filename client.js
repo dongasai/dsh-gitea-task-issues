@@ -236,6 +236,9 @@ window.__ModuleLoader__.load({
       'image.noUuid': 'Gitea 没有返回附件 uuid，无法写进正文。',
       'image.createdPartial': 'issue 已创建（#{index}），但图片上传失败：{message}。图片可以到详情页「附件」里补传。',
       'image.openCreated': '打开已创建的 issue',
+      'image.loading': '图片加载中…',
+      'image.unavailable': '图片「{name}」暂时不能内嵌显示',
+      'image.needsRestart': '重启 Harness 后图片才能内嵌显示（Host 还没加载附件代理）',
 
       'deps.title': '依赖（被这些挡住）',
       'deps.empty': '没有依赖。',
@@ -524,6 +527,9 @@ window.__ModuleLoader__.load({
       'image.noUuid': 'Gitea returned no attachment uuid, so the image cannot be referenced.',
       'image.createdPartial': 'The issue was created (#{index}) but the image upload failed: {message}. Upload it later from the detail page attachments.',
       'image.openCreated': 'Open the created issue',
+      'image.loading': 'Loading image…',
+      'image.unavailable': 'Image "{name}" cannot be shown inline yet',
+      'image.needsRestart': 'Restart the Harness to show images inline (the host has not loaded the attachment proxy yet)',
 
       'deps.title': 'Depends on (blocked by)',
       'deps.empty': 'No dependencies.',
@@ -733,6 +739,11 @@ window.__ModuleLoader__.load({
 .dsh-gti-image-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px}
 .dsh-gti-image-queue{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .dsh-gti-image-queue .dsh-gti-icon-button{width:18px;height:18px;font-size:12px;line-height:1}
+/* 正文里的图片按块级铺满可用宽度；加载中 / 拉不到时退化成一行说明，不留破图。 */
+.dsh-gti-inline-image{display:block;max-width:100%;height:auto;margin:6px 0;border-radius:var(--dsw-radius-sm,6px)}
+.dsh-gti-image-loading,.dsh-gti-image-fallback{display:inline-block;font-size:12px;color:var(--dsw-alias-label-tertiary);font-style:italic}
+.dsh-gti-image-previews{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-top:6px}
+.dsh-gti-image-preview{max-height:120px;max-width:100%;border-radius:var(--dsw-radius-sm,6px);border:.5px solid var(--dsw-alias-border-l2)}
 .dsh-gti-note{font-size:12px;color:var(--dsw-alias-label-tertiary)}
 .dsh-gti-note[data-tone="error"]{color:var(--dsw-alias-state-error-primary)}
 .dsh-gti-note[data-tone="warn"]{color:var(--dsw-alias-state-warn-primary)}
@@ -1056,17 +1067,202 @@ window.__ModuleLoader__.load({
       } catch {
         return { ok: false, message: t('error.unknown') }
       }
+      const contentType = String(file.type ?? '') === '' ? 'application/octet-stream' : file.type
       const result = await api.gitea(op, {
         ...target,
         name: file.name,
         filename: file.name,
-        contentType: String(file.type ?? '') === '' ? 'application/octet-stream' : file.type,
+        contentType,
         dataBase64,
       })
       if (!result.ok) return { ok: false, message: failureText(t, result) }
       const uuid = result.data?.uuid
       if (typeof uuid !== 'string' || uuid === '') return { ok: false, message: t('image.noUuid') }
-      return { ok: true, markdown: imageMarkdown(file.name, uuid) }
+      // 字节已经在手里了，顺手留一份 data URL：刚上传的图**立刻**能显示，不必等 Host 代理往返
+      //（Host 代理是给「重开页面 / 别人上传的图」兜底的）。
+      return { ok: true, uuid, dataUrl: `data:${contentType};base64,${dataBase64}`, markdown: imageMarkdown(file.name, uuid) }
+    }
+
+    /**
+     * 附件字节缓存：`serverId\u0000uuid` → `{ status: 'loading' | 'ready' | 'failed', dataUrl, message }`。
+     *
+     * 浏览器拿不到 Gitea 令牌，私有仓库的 `/attachments/{uuid}` 直接 `<img>` 是 404（2026-10-31
+     * 在本机实测），所以图片必须由 Host 代取（`attachment.content`）。缓存避免每次重渲染都打一趟桥；
+     * 刚上传的图在上传时就写进来，重开页面后的老图才走代理。
+     */
+    const ATTACHMENT_CACHE = new Map()
+
+    /** 缓存键。 */
+    function attachmentKey(serverId, uuid) {
+      return `${serverId ?? ''}\u0000${String(uuid).toLowerCase()}`
+    }
+
+    /** 从 markdown 图片地址里取附件 uuid；不是附件引用返回 null。 */
+    function attachmentUuid(ref) {
+      const match = /\/attachments\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[?#].*)?$/i.exec(String(ref ?? ''))
+      return match === null ? null : match[1].toLowerCase()
+    }
+
+    /** 正文里引用到的附件 uuid（去重、保持出现顺序）。 */
+    function collectAttachmentUuids(text) {
+      const out = []
+      const pattern = /!\[[^\]\n]*\]\(([^)\s]+)\)/g
+      for (const match of String(text ?? '').matchAll(pattern)) {
+        const uuid = attachmentUuid(match[1])
+        if (uuid !== null && !out.includes(uuid)) out.push(uuid)
+      }
+      return out
+    }
+
+    /**
+     * 合并一份状态表：没有真变化就返回原对象，避免 effect 每轮都触发重渲染。
+     * @param current - 当前状态。
+     * @param patch - 新条目。
+     * @returns 合并结果（可能是同一个引用）。
+     */
+    function mergeState(current, patch) {
+      const keys = Object.keys(patch)
+      if (keys.every((key) => current[key] === patch[key])) return current
+      return { ...current, ...patch }
+    }
+
+    /**
+     * 取若干附件的 data URL（Host 代取，浏览器不碰令牌）。
+     *
+     * 失败也要留痕：拉不到时界面显示一句说明，而不是一个破图。`unknown-operation` 是旧 Host
+     * 还没加载 `attachment.content` 的信号，提示里必须点出「重启 Harness」。
+     * @param api - 调用口。
+     * @param t - 文案。
+     * @param serverId - 服务器 id（没有就不取）。
+     * @param uuids - 要去重的附件 uuid 数组。
+     * @returns `{ [uuid]: { status, dataUrl, message } }`。
+     */
+    function useAttachmentData(api, t, serverId, uuids) {
+      const [data, setData] = React.useState({})
+      const key = uuids.join(',')
+      React.useEffect(() => {
+        if (serverId === null || serverId === undefined || serverId === '' || key === '') return () => {}
+        let alive = true
+        const known = {}
+        const missing = []
+        for (const uuid of key.split(',')) {
+          const cached = ATTACHMENT_CACHE.get(attachmentKey(serverId, uuid))
+          if (cached === undefined) missing.push(uuid)
+          else known[uuid] = cached
+        }
+        if (missing.length > 0) {
+          // 先占位：否则 effect 每次重跑都会为同一张图再发一次请求。
+          for (const uuid of missing) {
+            const placeholder = { status: 'loading', dataUrl: null, message: null }
+            ATTACHMENT_CACHE.set(attachmentKey(serverId, uuid), placeholder)
+          }
+        }
+        setData((current) => mergeState(current, known))
+        if (missing.length === 0) return () => { alive = false }
+        void (async () => {
+          for (const uuid of missing) {
+            const result = await api.gitea('attachment.content', { serverId, uuid })
+            let entry
+            if (result.ok && typeof result.data?.base64 === 'string') {
+              const contentType = result.data.contentType ?? 'application/octet-stream'
+              entry = { status: 'ready', dataUrl: `data:${contentType};base64,${result.data.base64}`, message: null }
+            } else {
+              entry = {
+                status: 'failed',
+                dataUrl: null,
+                message: result.code === 'unknown-operation' ? t('image.needsRestart') : failureText(t, result),
+              }
+            }
+            ATTACHMENT_CACHE.set(attachmentKey(serverId, uuid), entry)
+            if (alive) setData((current) => mergeState(current, { [uuid]: entry }))
+          }
+        })()
+        return () => { alive = false }
+      }, [api, t, serverId, key])
+      return data
+    }
+
+    /**
+     * 把正文里的 `![alt](ref)` 换成真图；拉不到的退化成一句说明。
+     *
+     * 面板不是 markdown 渲染器：**只认图片这一种语法**（标题 / 列表 / 代码块照旧按纯文本显示）。
+     * 用户上传图片后唯一需要「看见」的就是它，所以值得单独认一下。
+     * @param text - 正文。
+     * @param states - `useAttachmentData` 的结果。
+     * @param t - 文案。
+     * @param keyPrefix - React key 前缀（同一页面可能有多段正文）。
+     * @returns 节点数组；正文里没有图片时返回 null（调用方按纯文本渲染）。
+     */
+    function renderMarkdownImages(text, states, t, keyPrefix) {
+      const source = String(text ?? '')
+      const pattern = /!\[([^\]\n]*)\]\(([^)\s]+)\)/g
+      const nodes = []
+      let last = 0
+      let index = 0
+      for (const match of source.matchAll(pattern)) {
+        const alt = match[1]
+        const ref = match[2]
+        const at = match.index ?? 0
+        const uuid = attachmentUuid(ref)
+        const external = /^https?:\/\//i.test(ref)
+        if (uuid === null && !external) continue
+        if (at > last) nodes.push(source.slice(last, at))
+        if (uuid === null) {
+          nodes.push(h('img', { key: `${keyPrefix}-img-${index}`, className: 'dsh-gti-inline-image', src: ref, alt, loading: 'lazy' }))
+        } else {
+          const entry = states[uuid]
+          if (entry !== undefined && entry.status === 'ready') {
+            nodes.push(h('img', { key: `${keyPrefix}-img-${index}`, className: 'dsh-gti-inline-image', src: entry.dataUrl, alt, loading: 'lazy', 'data-gti-inline-image': uuid }))
+          } else if (entry !== undefined && entry.status === 'failed') {
+            // 原因写进可见文案：`title` 要悬停才看得到，而「重启 Harness」这种提示必须一眼可见。
+            const reason = entry.message === null || entry.message === undefined ? '' : `（${entry.message}）`
+            nodes.push(h('span', {
+              key: `${keyPrefix}-img-${index}`,
+              className: 'dsh-gti-image-fallback',
+              'data-gti-image-fallback': uuid,
+            }, `${t('image.unavailable', { name: alt === '' ? uuid : alt })}${reason}`))
+          } else {
+            nodes.push(h('span', { key: `${keyPrefix}-img-${index}`, className: 'dsh-gti-image-loading' }, t('image.loading')))
+          }
+        }
+        last = at + match[0].length
+        index += 1
+      }
+      if (index === 0) return null
+      if (last < source.length) nodes.push(source.slice(last))
+      return nodes
+    }
+
+    /**
+     * 正文下方的图片缩略图预览（编辑表单与评论框共用）。
+     *
+     * 两个来源：正文里已经引用、且拿得到字节的附件图；新建 issue 时还没上传、用本地对象 URL
+     * 预览的待上传图。
+     * @param props - `api` / `t` / `serverId` / `text` / `queued`。
+     */
+    function ImagePreviews({ api, t, serverId, text, queued }) {
+      const uuids = collectAttachmentUuids(text)
+      const states = useAttachmentData(api, t, serverId, uuids)
+      const thumbs = []
+      for (const uuid of uuids) {
+        const entry = states[uuid]
+        if (entry !== undefined && entry.status === 'ready') {
+          thumbs.push(h('img', { key: `done-${uuid}`, className: 'dsh-gti-image-preview', src: entry.dataUrl, alt: uuid, loading: 'lazy' }))
+        } else if (entry !== undefined && entry.status === 'failed') {
+          const reason = entry.message === null || entry.message === undefined ? '' : `（${entry.message}）`
+          thumbs.push(h('span', {
+            key: `fail-${uuid}`,
+            className: 'dsh-gti-image-fallback',
+            'data-gti-image-preview-failed': uuid,
+          }, `${t('image.unavailable', { name: uuid })}${reason}`))
+        }
+      }
+      for (const item of queued ?? []) {
+        if (item.preview === null || item.preview === undefined) continue
+        thumbs.push(h('img', { key: `queued-${item.key}`, className: 'dsh-gti-image-preview', src: item.preview, alt: item.file.name, loading: 'lazy', 'data-gti-queued-image': item.key }))
+      }
+      if (thumbs.length === 0) return null
+      return h('div', { className: 'dsh-gti-image-previews', 'data-gti-image-previews': String(thumbs.length) }, thumbs)
     }
 
     /** 用 `t` 渲染失败信息：传输层失败与 Host 明确拒绝分开说。 */
@@ -1417,10 +1613,14 @@ window.__ModuleLoader__.load({
           return
         }
         if (!immediate || target === null || target === undefined) {
-          setQueued((current) => [...current, ...images.map((file, offset) => ({
-            key: `${String(file.name)}:${String(file.size)}:${String(file.lastModified ?? 0)}:${current.length + offset}`,
-            file,
-          }))])
+          setQueued((current) => [...current, ...images.map((file, offset) => {
+            const preview = typeof URL?.createObjectURL === 'function' ? URL.createObjectURL(file) : null
+            return {
+              key: `${String(file.name)}:${String(file.size)}:${String(file.lastModified ?? 0)}:${current.length + offset}`,
+              file,
+              preview,
+            }
+          })])
           setNotice({ tone: 'success', text: t('image.queued', { n: images.length }) })
           return
         }
@@ -1433,6 +1633,14 @@ window.__ModuleLoader__.load({
           if (!uploaded.ok) {
             failure = uploaded.message
             break
+          }
+          // 刚上传的图立刻进缓存：不必等 Host 代理往返，界面马上能看见。
+          if (typeof uploaded.uuid === 'string' && target !== null && target !== undefined) {
+            ATTACHMENT_CACHE.set(attachmentKey(target.serverId, uploaded.uuid), {
+              status: 'ready',
+              dataUrl: uploaded.dataUrl,
+              message: null,
+            })
           }
           blocks.push(uploaded.markdown)
         }
@@ -1473,8 +1681,14 @@ window.__ModuleLoader__.load({
         },
       }
 
-      /** 从待上传列表里去掉一张。 */
-      const remove = (key) => setQueued((current) => current.filter((item) => item.key !== key))
+      /** 从待上传列表里去掉一张；本地预览的对象 URL 一并释放。 */
+      const remove = (key) => setQueued((current) => {
+        const item = current.find((entry) => entry.key === key)
+        if (item?.preview !== null && item?.preview !== undefined && typeof URL?.revokeObjectURL === 'function') {
+          URL.revokeObjectURL(item.preview)
+        }
+        return current.filter((entry) => entry.key !== key)
+      })
 
       return { queued, busy, notice, accept, remove, dropProps, setNotice }
     }
@@ -1572,7 +1786,8 @@ window.__ModuleLoader__.load({
               'data-gti-image-remove': item.key,
               onClick: () => images.remove(item.key),
             }, '×')))),
-          images.notice === null ? null : h(Banner, { tone: images.notice.tone, text: images.notice.text })),
+          images.notice === null ? null : h(Banner, { tone: images.notice.tone, text: images.notice.text }),
+          h(ImagePreviews, { api, t, serverId: uploadTarget?.serverId, text: body, queued: images.queued })),
         meta.labels.length === 0 ? null : h('div', { className: 'dsh-gti-field' },
           h('label', { className: 'dsh-gti-field-label' }, `${t('form.labels')}（${t('meta.labels', { n: meta.labels.length })}）`),
           h('div', { className: 'dsh-gti-choices' }, meta.labels.map((label) => h('span', {
@@ -1645,6 +1860,15 @@ window.__ModuleLoader__.load({
       const [depInput, setDepInput] = React.useState('')
       const [blockInput, setBlockInput] = React.useState('')
       const [minutes, setMinutes] = React.useState('30')
+
+      /** 正文与所有评论里引用到的附件图（去重；重渲染时 key 稳定，不会重复取）。 */
+      const imageUuids = detail === null
+        ? []
+        : [...new Set([
+          ...collectAttachmentUuids(detail.issue.body),
+          ...detail.comments.flatMap((comment) => collectAttachmentUuids(comment.body)),
+        ])]
+      const imageStates = useAttachmentData(api, t, target.serverId, imageUuids)
 
       /**
        * 评论框贴图：issue 已经存在，所以选完就传，markdown 直接插进草稿 —— 评论创建时正文就是
@@ -1770,7 +1994,9 @@ window.__ModuleLoader__.load({
             h('span', { className: 'dsh-gti-kv-value' }, issue.user === null ? t('common.none') : `@${issue.user.login}`),
             h('span', { className: 'dsh-gti-kv-key' }, t('issue.created')),
             h('span', { className: 'dsh-gti-kv-value' }, `${shortTime(issue.createdAt)} · ${t('issue.updated')} ${shortTime(issue.updatedAt)}`)),
-          h('div', { className: 'dsh-gti-body-text' }, issue.body === '' ? t('issue.bodyEmpty') : issue.body),
+          h('div', { className: 'dsh-gti-body-text' }, issue.body === ''
+            ? t('issue.bodyEmpty')
+            : (renderMarkdownImages(issue.body, imageStates, t, `body-${issue.index}`) ?? issue.body)),
           h('div', { className: 'dsh-gti-actions' },
             action(issue.state === 'open' ? t('issue.close') : t('issue.reopen'), 'issue.edit', { state: issue.state === 'open' ? 'closed' : 'open' }),
             action(issue.pinned ? t('issue.unpin') : t('issue.pin'), issue.pinned ? 'issue.unpin' : 'issue.pin'),
@@ -1962,7 +2188,8 @@ window.__ModuleLoader__.load({
                         })).then((done) => { if (done) setEditingComment(null) }),
                       }, t('common.save')),
                       h('button', { type: 'button', className: 'dsh-gti-button', onClick: () => setEditingComment(null) }, t('common.cancel'))))
-                  : h('p', { className: 'dsh-gti-comment-body' }, comment.body)))),
+                  : h('div', { className: 'dsh-gti-comment-body' },
+                    renderMarkdownImages(comment.body, imageStates, t, `comment-${comment.id}`) ?? comment.body)))),
             h('div', null,
               h('textarea', {
                 className: 'dsh-gti-textarea',
