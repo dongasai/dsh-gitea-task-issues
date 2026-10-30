@@ -224,6 +224,41 @@ issue 全被列了出来 —— 包括没有任何工作区绑过的仓库。用
 **只有工作区看板接线**：全局看板是跨工作区视图，不该往某个会话的输入框里写东西（探针断言
 全局看板里没有 `data-gti-send`）。
 
+## 正文贴图：为什么新建时要「先建、再传、后补正文」
+
+面板里贴图只复用两个已有操作：`issue.assets.upload`、`comment.assets.upload`。麻烦的不是上传，
+而是**附件端点要挂在一条已经存在的 issue / 评论上**，新建时这两样都还不存在。
+
+Gitea 网页版看起来「创建前就能传图」，靠的是两条别的东西：
+
+- 网页编辑器先把文件 POST 到 `/{owner}/{repo}/issues/attachments`（multipart 字段名是 `file`，
+  不是 API 的 `attachment`），拿回 `{ uuid }`，正文里直接写 `![name](/attachments/{uuid})`；
+- 提交表单时把这些 uuid 一起带上，服务端才把附件的 `IssueID` 绑到新 issue 上。
+
+这条路走不通：网页路由是**会话 Cookie** 鉴权的（`reqSignIn`），桥手里只有 API 令牌；而 API 的
+`CreateIssueOption` / `EditIssueOption` **都没有 attachments 字段**，API 侧没有任何「先传后绑」
+的入口。
+
+所以面板的语义只能是：
+
+| 场景 | 上传时机 | 写进正文的位置 |
+|---|---|---|
+| 编辑 issue | 选完立刻传（issue 已存在） | 光标处 |
+| 发表评论 | 选完立刻传（issue 已存在，附件挂 issue 上） | 光标处 |
+| 新建 issue | 先攒着，`issue.create` 成功后逐张上传，再 `issue.edit` 补正文 | 正文末尾 |
+
+四条取舍：
+
+- **不为贴图新增桥操作**：`lib/gitea.js` 的 op 是白名单，两个上传端点已经够用；多开一条一次性
+  op 等于给「任意文件上传」再开一个口子，收益只是少一次请求。
+- **markdown 用站内相对路径**：附件下载地址是 `{baseUrl}/attachments/{uuid}`，正文里写
+  `/attachments/{uuid}`，反代 / 多域名下都不会写死一台主机（Gitea 网页编辑器同款）。
+- **评论贴图借用 issue 附件端点**：`comment.assets.upload` 要 comment id，而评论还不存在；
+  改用 issue 附件能保证评论创建时正文已经完整（不需要先发占位评论再补）。代价是删掉 issue
+  附件会让评论里的图失效（写进 README「已知边界」）。
+- **半成功要看得见**：新建时 issue 已经建出来而图片失败了，必须停在表单页并点名编号 —— 否则
+  用户再点一次创建就是一条重复 issue；`tests/client.test.mjs` 里那条用例钉着这个分支。
+
 ## 分页与上限
 
 Swagger 里**没有**任何 `limit` 的 `maximum`，实际上限来自 `GET /settings/api` 的

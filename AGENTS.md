@@ -18,7 +18,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（116 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（121 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -44,7 +44,7 @@
 | [lib/triggers.js](lib/triggers.js) | **纯函数**：账本 + issues + 评论 → 触发（矩阵的主战场） |
 | [lib/watchstore.js](lib/watchstore.js) | 自动分配账本 `watch.json`：schema、收敛、剪枝 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 116 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 121 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 | [docs/auto-assign-design.md](docs/auto-assign-design.md) | 自动分配的设计稿：口径、账本、幂等闸门、边界 |
@@ -154,6 +154,14 @@
     `summary.busy` 仍把 capped 算进去（旧调用方只看这一个数），另有 `summary.capped` 细分。
     判断时除了 `list()` 还要加**本轮已投出计数**（`openedThisTick`）：`list()` 对新会话的
     `running` 有滞后，只靠它数会在同一轮里连开好几个、把上限一次冲穿（有探针钉着）。
+27. **正文贴图只复用已有的 `issue.assets.upload`**（评论也一样），不新增桥操作：图片只是把
+    返回的 `uuid` 拼成 `![文件名](/attachments/{uuid})`（**站内相对路径**，别写死 baseUrl）。
+    上传时机由「附件端点要不要 issue 编号」决定：编辑 / 评论**选完立刻传、插到光标处**；新建
+    issue 时 `CreateIssueOption` 没有 attachments 字段（网页版那条 `/issues/attachments` 是
+    会话 Cookie 的网页路由，API 令牌进不去），只能 **create → upload → `issue.edit` 补正文**，
+    追加到正文末尾。新建时图片失败要停在表单页写明「issue 已创建」，别放用户再点一次创建；
+    评论贴图借用 issue 附件端点（评论还没 id），删 issue 附件会让评论图失效 —— 这两条已写进
+    README「已知边界」，别当成 bug 改回去。
 
 ## 代码风格
 
@@ -217,6 +225,9 @@ node --check index.js && node --check client.js
 - **动「发送到 DSH」**（提示词格式、入口位置、失败横幅）→ 同步 README 的「界面长什么样」、
   「只能在浏览器里看的」第 15 条与「已知边界」，以及 [IMPLEMENTATION.md](IMPLEMENTATION.md)
   的「发送到 DSH」一节；`tests/client.test.mjs` 里那四条用例跟着改。
+- **动「正文贴图」**（上传时机、插入位置、图片 markdown、附件归属、失败态文案）→ 同步 README 的
+  「界面长什么样」、「只能在浏览器里看的」第 21 条与「已知边界」，[IMPLEMENTATION.md](IMPLEMENTATION.md)
+  的「正文贴图」一节；`tests/client.test.mjs` 里那五条贴图用例跟着改。
 - **改文案键** → `zh` 与 `en` 一起改（探针会拦）。
 - **已知边界**写在 README 末尾；**没真正解决之前不要从文档里删掉**。
 

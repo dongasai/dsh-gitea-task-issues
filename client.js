@@ -224,6 +224,19 @@ window.__ModuleLoader__.load({
       'assets.tooLarge': '文件超过 {limit} 上限。',
       'assets.failed': '上传失败：{message}',
 
+      // 正文贴图：Gitea 的附件端点挂在 issue 上，所以新建时只能「先建、再传、后补正文」。
+      'image.upload': '插入图片',
+      'image.uploading': '图片上传中…',
+      'image.hint': '可以直接粘贴或拖入图片',
+      'image.queued': '已选 {n} 张图片，创建后上传并追加到正文末尾',
+      'image.uploaded': '已插入 {n} 张图片',
+      'image.only': '只支持图片文件。',
+      'image.failed': '图片上传失败：{message}',
+      'image.tooLarge': '图片「{name}」超过 {limit} 上限。',
+      'image.noUuid': 'Gitea 没有返回附件 uuid，无法写进正文。',
+      'image.createdPartial': 'issue 已创建（#{index}），但图片上传失败：{message}。图片可以到详情页「附件」里补传。',
+      'image.openCreated': '打开已创建的 issue',
+
       'deps.title': '依赖（被这些挡住）',
       'deps.empty': '没有依赖。',
       'deps.add': '加依赖',
@@ -500,6 +513,18 @@ window.__ModuleLoader__.load({
       'assets.tooLarge': 'File exceeds the {limit} limit.',
       'assets.failed': 'Upload failed: {message}',
 
+      'image.upload': 'Insert image',
+      'image.uploading': 'Uploading image…',
+      'image.hint': 'Paste or drop an image straight into the body',
+      'image.queued': '{n} image(s) queued: uploaded after creation and appended to the body',
+      'image.uploaded': 'Inserted {n} image(s)',
+      'image.only': 'Only image files are supported.',
+      'image.failed': 'Image upload failed: {message}',
+      'image.tooLarge': 'Image "{name}" exceeds the {limit} limit.',
+      'image.noUuid': 'Gitea returned no attachment uuid, so the image cannot be referenced.',
+      'image.createdPartial': 'The issue was created (#{index}) but the image upload failed: {message}. Upload it later from the detail page attachments.',
+      'image.openCreated': 'Open the created issue',
+
       'deps.title': 'Depends on (blocked by)',
       'deps.empty': 'No dependencies.',
       'deps.add': 'Add dependency',
@@ -704,6 +729,10 @@ window.__ModuleLoader__.load({
 .dsh-gti-choice{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;border:.5px solid var(--dsw-alias-border-l2);font-size:11px;cursor:pointer;user-select:none}
 .dsh-gti-choice[data-on="true"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
 .dsh-gti-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+/* 正文贴图：按钮与隐藏 file input 同一行；新建时攒着的图片用 chip 排开，逐张可移除。 */
+.dsh-gti-image-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px}
+.dsh-gti-image-queue{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.dsh-gti-image-queue .dsh-gti-icon-button{width:18px;height:18px;font-size:12px;line-height:1}
 .dsh-gti-note{font-size:12px;color:var(--dsw-alias-label-tertiary)}
 .dsh-gti-note[data-tone="error"]{color:var(--dsw-alias-state-error-primary)}
 .dsh-gti-note[data-tone="warn"]{color:var(--dsw-alias-state-warn-primary)}
@@ -929,6 +958,115 @@ window.__ModuleLoader__.load({
         binary += String.fromCharCode(...bytes.subarray(at, at + chunk))
       }
       return btoa(binary)
+    }
+
+    /**
+     * 是不是一张能贴进正文的图片。
+     *
+     * 只看 `type` 不够：拖拽来的文件有时 `type` 是空的（尤其 Linux 桌面），所以再按后缀兜一层。
+     * @param file - 浏览器 `File`。
+     * @returns 布尔值。
+     */
+    function isImageFile(file) {
+      if (file === null || file === undefined) return false
+      if (typeof file.type === 'string' && file.type.startsWith('image/')) return true
+      return /\.(png|jpe?g|gif|webp|bmp|ico|svg|avif|apng|jfif|tiff?)$/i.test(String(file.name ?? ''))
+    }
+
+    /**
+     * 从粘贴 / 拖拽事件里取文件。
+     *
+     * 优先 `files`：拖拽与「从文件管理器粘贴」都填它。文件名粘贴（`items` 里是字符串）不会走到这里。
+     * `items` 只在 `files` 为空时兜底 —— 两者常常是同一批文件的两种视图，合起来会重复上传。
+     * @param event - 浏览器事件。
+     * @returns `File` 数组（可能为空）。
+     */
+    function filesOfEvent(event) {
+      const transfer = event?.clipboardData ?? event?.dataTransfer
+      if (transfer === null || transfer === undefined) return []
+      const listed = Array.from(transfer.files ?? []).filter((file) => file !== null && file !== undefined)
+      if (listed.length > 0) return listed
+      const fromItems = []
+      for (const item of Array.from(transfer.items ?? [])) {
+        if (item === null || item === undefined || item.kind !== 'file' || typeof item.getAsFile !== 'function') continue
+        const file = item.getAsFile()
+        if (file !== null && file !== undefined) fromItems.push(file)
+      }
+      return fromItems
+    }
+
+    /**
+     * 一张图片在正文里的 markdown。
+     *
+     * 用**站内相对路径** `/attachments/{uuid}`（Gitea 网页编辑器同款）：issue 在 Gitea 网页上渲染时
+     * 相对路径必然指回同一台服务器，换成绝对地址反而会在反代/多域名下写死一台主机。
+     * @param name - 文件名。
+     * @param uuid - Gitea 附件的 uuid。
+     * @returns markdown 片段。
+     */
+    function imageMarkdown(name, uuid) {
+      const alt = String(name ?? '').replace(/[[\]]/g, '').trim() || 'image'
+      return `![${alt}](/attachments/${uuid})`
+    }
+
+    /**
+     * 把若干段 markdown 追加到正文末尾（空正文不留前导空行）。
+     * @param body - 当前正文。
+     * @param blocks - 要追加的 markdown 片段。
+     * @returns 新正文。
+     */
+    function appendMarkdown(body, blocks) {
+      if (blocks.length === 0) return body
+      const head = typeof body === 'string' ? body.replace(/\s+$/, '') : ''
+      return head === '' ? blocks.join('\n') : `${head}\n\n${blocks.join('\n')}`
+    }
+
+    /**
+     * 在光标处插入一段 markdown；拿不到选区（没聚焦过 / 测试环境）就追加到末尾。
+     * @param body - 当前正文。
+     * @param markdown - 要插入的片段。
+     * @param element - 触发插入的 textarea。
+     * @returns 新正文。
+     */
+    function insertMarkdown(body, markdown, element) {
+      const hasSelection = element !== null && element !== undefined && typeof element.selectionStart === 'number'
+      const start = hasSelection ? element.selectionStart : body.length
+      const end = hasSelection && typeof element.selectionEnd === 'number' ? element.selectionEnd : start
+      return `${body.slice(0, start)}${markdown}${body.slice(end)}`
+    }
+
+    /**
+     * 上传一张图片并返回能写进正文的 markdown。
+     *
+     * `issue.assets.upload` 与 `comment.assets.upload` 的入参只差目标字段，所以这里用 `op` 区分。
+     * @param api - 调用口。
+     * @param t - 文案。
+     * @param op - 上传操作名。
+     * @param target - 上传目标（issue：`{serverId, owner, repo, index}`）。
+     * @param file - 浏览器 `File`。
+     * @returns `{ ok: true, markdown }` 或 `{ ok: false, message }`。
+     */
+    async function uploadImage(api, t, op, target, file) {
+      if (typeof file.size === 'number' && file.size > MAX_ATTACHMENT_BYTES) {
+        return { ok: false, message: t('image.tooLarge', { name: file.name ?? '?', limit: formatBytes(MAX_ATTACHMENT_BYTES) }) }
+      }
+      let dataBase64
+      try {
+        dataBase64 = await fileToBase64(file)
+      } catch {
+        return { ok: false, message: t('error.unknown') }
+      }
+      const result = await api.gitea(op, {
+        ...target,
+        name: file.name,
+        filename: file.name,
+        contentType: String(file.type ?? '') === '' ? 'application/octet-stream' : file.type,
+        dataBase64,
+      })
+      if (!result.ok) return { ok: false, message: failureText(t, result) }
+      const uuid = result.data?.uuid
+      if (typeof uuid !== 'string' || uuid === '') return { ok: false, message: t('image.noUuid') }
+      return { ok: true, markdown: imageMarkdown(file.name, uuid) }
     }
 
     /** 用 `t` 渲染失败信息：传输层失败与 Host 明确拒绝分开说。 */
@@ -1241,13 +1379,118 @@ window.__ModuleLoader__.load({
         }, GROUPS.map((item) => h('option', { key: item, value: item }, t(`group.${item}`)))) : null)
     }
 
+    // ── 正文贴图 ─────────────────────────────────────────────────────────────
+
+    /**
+     * 「正文里插图片」的一组交互：选文件、粘贴、拖入收敛成同一条路径。
+     *
+     * 两种模式的差别只在**上传时机**，不在 UI 上：
+     * - `immediate: true`（编辑 issue、发表评论）：issue 已经存在，附件端点可用，选完就传，
+     *   markdown 插在光标处，用户能看见自己插入的位置；
+     * - `immediate: false`（新建 issue）：还没有 issue 编号。Gitea 的 `CreateIssueOption`
+     *   **没有 attachments 字段**（网页版靠创建前先传到 `/issues/attachments` 再在表单里带
+     *   uuid，那是会话 Cookie 的网页路由，API 令牌进不去），所以只能先把文件攒着，创建成功后
+     *   再传，markdown 追加到正文末尾。
+     *
+     * 不新增桥操作：`lib/gitea.js` 的 op 是白名单，而现有的 `issue.assets.upload` /
+     * `comment.assets.upload` 已经够用 —— 图片只是把返回的 uuid 拼成 markdown。
+     *
+     * @param options - `api` / `t` / `op`（上传操作名）/ `target`（上传目标）/ `immediate` /
+     *   `onInsert`（`(markdown, element) => void`）。
+     * @returns `{ queued, busy, notice, accept, remove, dropProps, setNotice }`。
+     */
+    function useImageInsert({ api, t, op, target, immediate, onInsert }) {
+      /** 仅新建 issue 用：等创建后才上传的文件。 */
+      const [queued, setQueued] = React.useState([])
+      const [busy, setBusy] = React.useState(false)
+      const [notice, setNotice] = React.useState(null)
+
+      /**
+       * 收下一批文件（来自选择 / 粘贴 / 拖入）。
+       * @param files - `File` 数组。
+       * @param element - 触发它的 textarea（决定插入位置；没有就追加到末尾）。
+       */
+      const accept = async (files, element) => {
+        const images = (files ?? []).filter(isImageFile)
+        if (images.length === 0) {
+          setNotice({ tone: 'error', text: t('image.only') })
+          return
+        }
+        if (!immediate || target === null || target === undefined) {
+          setQueued((current) => [...current, ...images.map((file, offset) => ({
+            key: `${String(file.name)}:${String(file.size)}:${String(file.lastModified ?? 0)}:${current.length + offset}`,
+            file,
+          }))])
+          setNotice({ tone: 'success', text: t('image.queued', { n: images.length }) })
+          return
+        }
+        setBusy(true)
+        setNotice(null)
+        const blocks = []
+        let failure = null
+        for (const file of images) {
+          const uploaded = await uploadImage(api, t, op, target, file)
+          if (!uploaded.ok) {
+            failure = uploaded.message
+            break
+          }
+          blocks.push(uploaded.markdown)
+        }
+        setBusy(false)
+        if (blocks.length > 0) onInsert?.(blocks.join('\n'), element)
+        if (failure !== null) setNotice({ tone: 'error', text: t('image.failed', { message: failure }) })
+        else setNotice({ tone: 'success', text: t('image.uploaded', { n: blocks.length }) })
+      }
+
+      /**
+       * 挂到 textarea 上的粘贴 / 拖入。
+       *
+       * 只有**真的带图片文件**时才 `preventDefault` —— 普通文字粘贴必须保持浏览器默认行为，
+       * 剪贴板里是文本文件时也不拦（拦了就等于把粘贴吞掉，用户得不到任何结果）。
+       * 不是图片时只提示一句「只支持图片文件」。
+       */
+      const dropProps = {
+        onPaste: (event) => {
+          const files = filesOfEvent(event)
+          if (files.length === 0) return
+          if (files.every((file) => !isImageFile(file))) {
+            setNotice({ tone: 'error', text: t('image.only') })
+            return
+          }
+          event.preventDefault()
+          void accept(files, event.target)
+        },
+        onDragOver: (event) => { event.preventDefault() },
+        onDrop: (event) => {
+          const files = filesOfEvent(event)
+          if (files.length === 0) return
+          if (files.every((file) => !isImageFile(file))) {
+            setNotice({ tone: 'error', text: t('image.only') })
+            return
+          }
+          event.preventDefault()
+          void accept(files, event.target)
+        },
+      }
+
+      /** 从待上传列表里去掉一张。 */
+      const remove = (key) => setQueued((current) => current.filter((item) => item.key !== key))
+
+      return { queued, busy, notice, accept, remove, dropProps, setNotice }
+    }
+
     // ── issue 表单（新建 / 编辑共用） ───────────────────────────────────────
 
     /**
      * 新建与编辑共用一个表单：差异只在初始值与提交动作，不复制一份 UI。
-     * @param props - `mode`（`create` / `edit`）、`meta`、`initial`、`onSubmit`、`onCancel`、`t`、`busy`。
+     *
+     * 图片也走同一套入口：编辑时 `uploadTarget` 有编号 → 选完立刻上传、插到光标处；新建时
+     * 没有编号 → 攒在表单里，提交时随 `values.images` 交给上层，创建成功后再上传。
+     *
+     * @param props - `mode`（`create` / `edit`）、`meta`、`initial`、`onSubmit`、`onCancel`、`t`、
+     *   `busy`、`api`、`uploadTarget`（编辑时的上传目标，含 `index`；新建为 null）。
      */
-    function IssueForm({ mode, meta, initial, onSubmit, onCancel, t, busy }) {
+    function IssueForm({ mode, meta, initial, onSubmit, onCancel, t, busy, api, uploadTarget }) {
       const [title, setTitle] = React.useState(initial.title ?? '')
       const [body, setBody] = React.useState(initial.body ?? '')
       const [dueDate, setDueDate] = React.useState(
@@ -1255,6 +1498,15 @@ window.__ModuleLoader__.load({
       const [milestoneId, setMilestoneId] = React.useState(initial.milestoneId === undefined ? '' : String(initial.milestoneId))
       const [labelIds, setLabelIds] = React.useState(initial.labelIds ?? [])
       const [assignees, setAssignees] = React.useState(initial.assignees ?? [])
+
+      const images = useImageInsert({
+        api,
+        t,
+        op: 'issue.assets.upload',
+        target: uploadTarget ?? null,
+        immediate: mode === 'edit' && uploadTarget !== null && uploadTarget !== undefined,
+        onInsert: (markdown, element) => setBody((current) => insertMarkdown(current, markdown, element)),
+      })
 
       const toggle = (list, setList, value) => {
         setList(list.includes(value) ? list.filter((item) => item !== value) : [...list, value])
@@ -1268,6 +1520,7 @@ window.__ModuleLoader__.load({
           milestone: milestoneId === '' ? undefined : Number(milestoneId),
           labels: labelIds,
           assignees,
+          images: images.queued.map((item) => item.file),
         })
       }
 
@@ -1289,7 +1542,37 @@ window.__ModuleLoader__.load({
             placeholder: t('form.bodyPlaceholder'),
             'data-gti-form-body': 'true',
             onChange: (event) => setBody(event.target.value),
-          })),
+            ...images.dropProps,
+          }),
+          h('div', { className: 'dsh-gti-image-bar' },
+            h('label', { className: 'dsh-gti-button', 'data-gti-image-pick': 'true' },
+              images.busy ? t('image.uploading') : t('image.upload'),
+              h('input', {
+                type: 'file',
+                accept: 'image/*',
+                multiple: true,
+                'data-gti-image-input': 'true',
+                style: { display: 'none' },
+                onChange: (event) => {
+                  const files = Array.from(event.target.files ?? [])
+                  event.target.value = ''
+                  void images.accept(files, undefined)
+                },
+              })),
+            h('span', { className: 'dsh-gti-note' }, t('image.hint'))),
+          images.queued.length === 0 ? null : h('div', {
+            className: 'dsh-gti-image-queue',
+            'data-gti-image-queue': String(images.queued.length),
+          }, images.queued.map((item) => h('span', { key: item.key, className: 'dsh-gti-chip' },
+            item.file.name,
+            h('button', {
+              type: 'button',
+              className: 'dsh-gti-icon-button',
+              title: t('common.delete'),
+              'data-gti-image-remove': item.key,
+              onClick: () => images.remove(item.key),
+            }, '×')))),
+          images.notice === null ? null : h(Banner, { tone: images.notice.tone, text: images.notice.text })),
         meta.labels.length === 0 ? null : h('div', { className: 'dsh-gti-field' },
           h('label', { className: 'dsh-gti-field-label' }, `${t('form.labels')}（${t('meta.labels', { n: meta.labels.length })}）`),
           h('div', { className: 'dsh-gti-choices' }, meta.labels.map((label) => h('span', {
@@ -1332,7 +1615,7 @@ window.__ModuleLoader__.load({
             type: 'button',
             className: 'dsh-gti-button',
             'data-primary': 'true',
-            disabled: busy || title.trim() === '',
+            disabled: busy || images.busy || title.trim() === '',
             'data-gti-form-submit': 'true',
             onClick: submit,
           }, mode === 'create' ? t('form.submitCreate') : t('form.submitSave')),
@@ -1362,6 +1645,20 @@ window.__ModuleLoader__.load({
       const [depInput, setDepInput] = React.useState('')
       const [blockInput, setBlockInput] = React.useState('')
       const [minutes, setMinutes] = React.useState('30')
+
+      /**
+       * 评论框贴图：issue 已经存在，所以选完就传，markdown 直接插进草稿 —— 评论创建时正文就是
+       * 完整的，不需要「先建评论再补正文」。附件因此挂在 issue 上而不是这条评论上（见 README
+       * 「已知边界」：Gitea 的 API 没有「先传附件、创建时再绑定」的公开路径）。
+       */
+      const commentImages = useImageInsert({
+        api,
+        t,
+        op: 'issue.assets.upload',
+        target: { serverId: target.serverId, owner: target.owner, repo: target.repo, index: target.index },
+        immediate: true,
+        onInsert: (markdown, element) => setDraft((current) => insertMarkdown(current, markdown, element)),
+      })
 
       /** 重新拉详情。 */
       const reload = React.useCallback(async () => {
@@ -1673,16 +1970,34 @@ window.__ModuleLoader__.load({
                 placeholder: t('comments.placeholder'),
                 'data-gti-comment-draft': 'true',
                 onChange: (event) => setDraft(event.target.value),
+                ...commentImages.dropProps,
               }),
+              h('div', { className: 'dsh-gti-image-bar' },
+                h('label', { className: 'dsh-gti-button', 'data-gti-image-pick': 'true' },
+                  commentImages.busy ? t('image.uploading') : t('image.upload'),
+                  h('input', {
+                    type: 'file',
+                    accept: 'image/*',
+                    multiple: true,
+                    'data-gti-image-input': 'true',
+                    style: { display: 'none' },
+                    onChange: (event) => {
+                      const files = Array.from(event.target.files ?? [])
+                      event.target.value = ''
+                      void commentImages.accept(files, undefined)
+                    },
+                  })),
+                h('span', { className: 'dsh-gti-note' }, t('image.hint'))),
+              commentImages.notice === null ? null : h(Banner, { tone: commentImages.notice.tone, text: commentImages.notice.text }),
               h('div', { className: 'dsh-gti-actions' },
                 h('button', {
                   type: 'button',
                   className: 'dsh-gti-button',
                   'data-primary': 'true',
-                  disabled: busy !== null || draft.trim() === '',
+                  disabled: busy !== null || commentImages.busy || draft.trim() === '',
                   'data-gti-comment-submit': 'true',
                   onClick: () => void act('comment', () => api.gitea('issue.comments.create', { ...target, body: draft }))
-                    .then((done) => { if (done) setDraft('') }),
+                    .then((done) => { if (done) { setDraft(''); commentImages.setNotice(null) } }),
                 }, busy === 'comment' ? t('comments.saving') : t('comments.submit')),
                 meta === null ? null : h('span', { className: 'dsh-gti-note' }, `${t('meta.labels', { n: meta.labels.length })} · ${t('meta.milestones', { n: meta.milestones.length })}`))))))
     }
@@ -2489,40 +2804,79 @@ window.__ModuleLoader__.load({
       const meta = useRepoMeta(api, target)
       const [busy, setBusy] = React.useState(false)
       const [error, setError] = React.useState(null)
+      /**
+       * 新建时「issue 已经建出来、但图片没传完」的那条 issue。
+       *
+       * 不能假装没发生过（再点一次创建就是**重复 issue**），也不能直接回到列表（用户看不到
+       * 失败原因，只记得自己贴过图）。所以停在表单页、点名编号与原因，只留「打开已创建的 issue」。
+       */
+      const [created, setCreated] = React.useState(null)
 
       const submit = async (values) => {
         setBusy(true)
         setError(null)
         const base = { serverId: target.serverId, owner: target.owner, repo: target.repo }
+        const { images = [], ...fields } = values
         if (mode === 'create') {
-          const result = await api.gitea('issue.create', { ...base, ...values })
-          setBusy(false)
+          const result = await api.gitea('issue.create', { ...base, ...fields })
           if (!result.ok) {
+            setBusy(false)
             setError(failureText(t, result))
             return
           }
-          onDone(result.data)
+          const issueCreated = result.data
+          if (images.length > 0) {
+            const blocks = []
+            let failure = null
+            for (const file of images) {
+              const uploaded = await uploadImage(api, t, 'issue.assets.upload', {
+                ...base,
+                index: issueCreated.index,
+              }, file)
+              if (!uploaded.ok) {
+                failure = uploaded.message
+                break
+              }
+              blocks.push(uploaded.markdown)
+            }
+            if (failure === null && blocks.length > 0) {
+              const patched = await api.gitea('issue.edit', {
+                ...base,
+                index: issueCreated.index,
+                body: appendMarkdown(fields.body, blocks),
+              })
+              if (!patched.ok) failure = failureText(t, patched)
+            }
+            if (failure !== null) {
+              setBusy(false)
+              setCreated(issueCreated)
+              setError(t('image.createdPartial', { index: issueCreated.index, message: failure }))
+              return
+            }
+          }
+          setBusy(false)
+          onDone(issueCreated)
           return
         }
         const index = issue.index
-        const patch = { ...base, index, title: values.title, body: values.body }
-        if (values.due_date === undefined) patch.unset_due_date = true
-        else patch.due_date = values.due_date
-        if (values.milestone !== undefined) patch.milestone = values.milestone
+        const patch = { ...base, index, title: fields.title, body: fields.body }
+        if (fields.due_date === undefined) patch.unset_due_date = true
+        else patch.due_date = fields.due_date
+        if (fields.milestone !== undefined) patch.milestone = fields.milestone
         const edited = await api.gitea('issue.edit', patch)
         if (!edited.ok) {
           setBusy(false)
           setError(failureText(t, edited))
           return
         }
-        const labelled = await api.gitea('issue.labels.set', { ...base, index, labels: values.labels })
+        const labelled = await api.gitea('issue.labels.set', { ...base, index, labels: fields.labels })
         if (!labelled.ok) {
           setBusy(false)
           setError(failureText(t, labelled))
           return
         }
         const before = new Set((issue.assignees ?? []).map((user) => user.login))
-        const after = new Set(values.assignees ?? [])
+        const after = new Set(fields.assignees ?? [])
         const added = [...after].filter((login) => !before.has(login))
         const removed = [...before].filter((login) => !after.has(login))
         if (added.length > 0) await api.gitea('issue.assignees.add', { ...base, index, assignees: added })
@@ -2534,13 +2888,23 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dsh-gti-scroll', 'data-gti-editor': mode },
         h('div', { className: 'dsh-gti-section-head' }, mode === 'create' ? t('form.createTitle') : t('form.editTitle')),
         error === null ? null : h(Banner, { tone: 'error', text: error }),
+        created === null ? null : h('div', { className: 'dsh-gti-actions', style: { padding: '0 16px 8px' } },
+          h('button', {
+            type: 'button',
+            className: 'dsh-gti-button',
+            'data-primary': 'true',
+            'data-gti-open-created': String(created.index),
+            onClick: () => onDone(created),
+          }, t('image.openCreated'))),
         meta === null
           ? h(Loading, { t })
           : h(IssueForm, {
             mode,
             meta,
-            busy,
+            busy: busy || created !== null,
             t,
+            api,
+            uploadTarget: mode === 'edit' ? { ...target, index: issue.index } : null,
             initial: mode === 'create'
               ? { title: '', body: '' }
               : {

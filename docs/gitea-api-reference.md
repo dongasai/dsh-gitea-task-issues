@@ -119,7 +119,7 @@
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `title` | string | 否 | 新标题 |
-| `body` | string | 否 | 新正文 |
+| `body` | string | 否 | 新正文；**传空串 `""` 是「清空正文」**（不是「不改」），上游接受 |
 | `state` | string | 否 | **swagger 没有声明枚举**（只有 `string`）；原文无取值列表 |
 | `assignee` | string | 否 | swagger 描述为 **deprecated** |
 | `assignees` | [string] | 否 | 一组用户名 |

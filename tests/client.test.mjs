@@ -1162,3 +1162,180 @@ test('全局看板：手填过仓库再切回「已绑定的工作区」，界�
   assert.ok(created, `提交没有发出 issue.create：${JSON.stringify(calls)}`)
   assert.equal(created.params.params.repo, 'mylike', '提交的目标必须是重新选中的工作区仓库，不是手填那个')
 })
+
+// ── 正文贴图：编辑 / 新建 / 评论 / 只认图片 / 半成功 ──────────────────────────
+
+/**
+ * 造一张真的图片 `File`（Node 18+ 有全局 `File`，`arrayBuffer()` 走的是同一套 Blob 实现）。
+ * @param name - 文件名。
+ * @param type - MIME。
+ * @param bytes - 内容（默认塞一个 PNG 头，够 `byteLength` 与 base64 用）。
+ * @returns `File`。
+ */
+function imageFile(name = 'shot.png', type = 'image/png', bytes = [137, 80, 78, 71]) {
+  return new File([new Uint8Array(bytes)], name, { type })
+}
+
+/** 模拟一次带文件的粘贴 / 拖入事件。 */
+function fileEvent(file) {
+  return {
+    clipboardData: { files: [file] },
+    target: { selectionStart: 0, selectionEnd: 0 },
+    preventDefault() {},
+  }
+}
+
+test('编辑 issue：粘贴图片立刻上传，markdown 插在光标处并随正文一起保存', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+
+  let text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => typeof node.props?.['data-gti-issue'] === 'string').props.onClick(FIXTURES.issues[0])
+  text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => node.props?.['data-gti-edit'] === 'true').props.onClick()
+  text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const body = findNode(mini, (node) => node.props?.['data-gti-form-body'] !== undefined)
+  assert.ok(body, '没有进入编辑表单')
+
+  calls.length = 0
+  body.props.onPaste(fileEvent(imageFile()))
+  await flush()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const upload = calls.find((call) => call.op === 'gitea.call' && call.params.op === 'issue.assets.upload')
+  assert.ok(upload, `粘贴图片没有走上传：${JSON.stringify(calls)}`)
+  assert.equal(upload.params.params.index, 12, '编辑时上传必须落在这条 issue 的附件端点')
+  assert.equal(upload.params.params.filename, 'shot.png')
+
+  const updated = findNode(mini, (node) => node.props?.['data-gti-form-body'] !== undefined)
+  assert.equal(updated.props.value, '![shot.png](/attachments/u)正文内容', 'markdown 应插在光标（开头）处')
+
+  findNode(mini, (node) => node.props?.['data-gti-form-submit'] === 'true').props.onClick()
+  await flush()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const saved = calls.find((call) => call.op === 'gitea.call' && call.params.op === 'issue.edit')
+  assert.ok(saved, '保存没有发出 issue.edit')
+  assert.equal(saved.params.params.body, '![shot.png](/attachments/u)正文内容')
+})
+
+test('新建 issue：图片先攒着，创建成功后上传并追加到正文末尾', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => node.props?.['data-gti-new'] === 'true').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => node.props?.['data-gti-target-workspace'] !== undefined)
+    .props.onChange({ target: { value: '/work/other' } })
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => node.props?.['data-gti-form-title']).props.onChange({ target: { value: '带图的新 issue' } })
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+
+  calls.length = 0
+  const input = findNode(mini, (node) => node.props?.['data-gti-image-input'] !== undefined)
+  assert.ok(input, '新建表单里没有图片入口')
+  input.props.onChange({ target: { files: [imageFile()], value: '' } })
+  await flush()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-image-queue'] !== undefined).props['data-gti-image-queue'], '1',
+    '新建时图片应当先进入待上传列表')
+  assert.equal(calls.filter((call) => call.params?.op === 'issue.assets.upload').length, 0,
+    '新建时还没有 issue 编号，不该先发上传请求')
+
+  findNode(mini, (node) => node.props?.['data-gti-form-submit'] === 'true').props.onClick()
+  await flush()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const ops = calls
+    .filter((call) => call.op === 'gitea.call' && ['issue.create', 'issue.assets.upload', 'issue.edit'].includes(call.params.op))
+    .map((call) => call.params.op)
+  assert.deepEqual(ops, ['issue.create', 'issue.assets.upload', 'issue.edit'], `顺序必须是先建再传后补正文：${JSON.stringify(ops)}`)
+  const patched = calls.find((call) => call.params?.op === 'issue.edit')
+  assert.equal(patched.params.params.body, '![shot.png](/attachments/u)', '图片 markdown 要追加进正文')
+})
+
+test('评论框：粘贴图片立刻上传并把 markdown 写进草稿，发表时正文已完整', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => typeof node.props?.['data-gti-issue'] === 'string').props.onClick(FIXTURES.issues[0])
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const draftNode = findNode(mini, (node) => node.props?.['data-gti-comment-draft'] !== undefined)
+  assert.ok(draftNode, '详情里没有评论草稿框')
+
+  calls.length = 0
+  draftNode.props.onPaste(fileEvent(imageFile()))
+  await flush()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const upload = calls.find((call) => call.op === 'gitea.call' && call.params.op === 'issue.assets.upload')
+  assert.ok(upload, '评论框贴图没有上传')
+  const next = findNode(mini, (node) => node.props?.['data-gti-comment-draft'] !== undefined)
+  assert.equal(next.props.value, '![shot.png](/attachments/u)', 'markdown 应写进草稿')
+
+  findNode(mini, (node) => node.props?.['data-gti-comment-submit'] === 'true').props.onClick()
+  await flush()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const comment = calls.find((call) => call.params?.op === 'issue.comments.create')
+  assert.ok(comment, '没有发出发表评论请求')
+  assert.equal(comment.params.params.body, '![shot.png](/attachments/u)')
+})
+
+test('贴图只认图片：文本文件不发上传，也不吞掉普通粘贴', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => typeof node.props?.['data-gti-issue'] === 'string').props.onClick(FIXTURES.issues[0])
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => node.props?.['data-gti-edit'] === 'true').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const body = findNode(mini, (node) => node.props?.['data-gti-form-body'] !== undefined)
+
+  calls.length = 0
+  let prevented = 0
+  body.props.onPaste({
+    clipboardData: { files: [new File(['hello'], 'note.txt', { type: 'text/plain' })] },
+    target: { selectionStart: 0, selectionEnd: 0 },
+    preventDefault() { prevented += 1 },
+  })
+  await flush()
+  const text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+  assert.equal(prevented, 0, '非图片文件不该拦掉默认粘贴')
+  assert.equal(calls.filter((call) => call.params?.op === 'issue.assets.upload').length, 0, '非图片文件不该发上传')
+  assert.match(text, /只支持图片文件/)
+})
+
+test('新建时图片上传失败：只建一次 issue，停在表单并给「打开已创建的 issue」', async () => {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+
+  try {
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+    findNode(mini, (node) => node.props?.['data-gti-new'] === 'true').props.onClick()
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+    findNode(mini, (node) => node.props?.['data-gti-target-workspace'] !== undefined)
+      .props.onChange({ target: { value: '/work/other' } })
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+    findNode(mini, (node) => node.props?.['data-gti-form-title']).props.onChange({ target: { value: '图片会失败' } })
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+    findNode(mini, (node) => node.props?.['data-gti-image-input'] !== undefined)
+      .props.onChange({ target: { files: [imageFile()], value: '' } })
+    await flush()
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+
+    calls.length = 0
+    FIXTURES.failUploadOnce = true
+    findNode(mini, (node) => node.props?.['data-gti-form-submit'] === 'true').props.onClick()
+    await flush()
+    const text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+    assert.equal(calls.filter((call) => call.params?.op === 'issue.create').length, 1, 'issue 只该建一次')
+    assert.match(text, /issue 已创建/)
+    const open = findNode(mini, (node) => typeof node.props?.['data-gti-open-created'] === 'string')
+    assert.ok(open, '应当给「打开已创建的 issue」，而不是让用户再点一次创建')
+
+    open.props.onClick()
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+    assert.equal(findNode(mini, (node) => node.props?.['data-gti-form-submit']), undefined, '点击后应离开表单')
+  } finally {
+    delete FIXTURES.failUploadOnce
+  }
+})

@@ -160,7 +160,14 @@ export function bridgeAnswer(op, params) {
     if (inner === 'issue.labels.set') return { ok: true, data: FIXTURES.meta.labels }
     if (inner === 'issue.comments.create') return { ok: true, data: FIXTURES.detail.comments[0] }
     if (inner === 'issue.times.add') return { ok: true, data: FIXTURES.detail.times[0] }
-    if (inner === 'issue.assets.upload') return { ok: true, data: FIXTURES.detail.assets[0] }
+    if (inner === 'issue.assets.upload') {
+      // 一次性失败开关：验「issue 已创建、图片没传上去」这条半成功路径（不重复建 issue）。
+      if (FIXTURES.failUploadOnce === true) {
+        delete FIXTURES.failUploadOnce
+        return { ok: false, code: 'upstream-error', message: 'boom' }
+      }
+      return { ok: true, data: FIXTURES.detail.assets[0] }
+    }
     return { ok: true, data: null }
   }
   return { ok: false, code: 'unknown-operation', message: `no fixture for ${op}` }

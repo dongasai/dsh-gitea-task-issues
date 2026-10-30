@@ -464,6 +464,14 @@ test('issue：编辑、状态、截止日、标签替换、指派增删', async 
   })
   assert.equal(edited.title, '改过标题')
 
+  // 空字符串 = 清空正文：`optString` 会把它折叠成「字段没出现」，界面就会「保存成功但正文没变」。
+  const emptied = await ok('gitea.call', {
+    sessionId: SESSION_ID,
+    op: 'issue.edit',
+    params: { index: world.issueIndex, body: '' },
+  })
+  assert.equal(emptied.body, '', '清空正文必须真的把 body 送到上游')
+
   const labelled = await ok('gitea.call', {
     sessionId: SESSION_ID,
     op: 'issue.labels.set',
