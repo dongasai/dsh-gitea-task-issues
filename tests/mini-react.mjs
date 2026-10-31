@@ -73,6 +73,13 @@ export function createMiniReact(options = {}) {
     return [owner.slots[index], setState]
   }
 
+  /** `useRef`：一个跨渲染稳定的 `{ current }` 盒子（编辑器要拿 textarea 的光标位置）。 */
+  function useRef(initial) {
+    const index = slot()
+    if (!(index in table.slots)) table.slots[index] = { current: initial }
+    return table.slots[index]
+  }
+
   function useCallback(fn, deps) {
     const index = slot()
     const previous = readSlot(index)
@@ -107,7 +114,7 @@ export function createMiniReact(options = {}) {
     }
   }
 
-  const React = { createElement, useState, useEffect, useCallback, useMemo, Fragment: Symbol('Fragment') }
+  const React = { createElement, useState, useEffect, useCallback, useMemo, useRef, Fragment: Symbol('Fragment') }
 
   /**
    * 递归渲染。

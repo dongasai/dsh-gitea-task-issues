@@ -18,7 +18,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（125 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（130 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -44,7 +44,7 @@
 | [lib/triggers.js](lib/triggers.js) | **纯函数**：账本 + issues + 评论 → 触发（矩阵的主战场） |
 | [lib/watchstore.js](lib/watchstore.js) | 自动分配账本 `watch.json`：schema、收敛、剪枝 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 125 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 130 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 | [docs/auto-assign-design.md](docs/auto-assign-design.md) | 自动分配的设计稿：口径、账本、幂等闸门、边界 |
@@ -169,6 +169,13 @@
     让每张图都等代理往返。面板**只渲染图片这一种 markdown**，别顺手写成一个半吊子 markdown
     渲染器；拉不到图（旧 Host `unknown-operation` / >10 MiB / 403）要显示**可见的**说明，
     不能留破图，`title` 不算（悬停才看得到）。
+29. **编辑器的「预览」必须用 Gitea 的 `POST /markdown`**（`markdown.render`），不要自己写
+    markdown 渲染器：字段名是 Go 导出名 `Text` / `Mode` / `Context`（小写会静默回空 body，
+    本机实测）；返回 HTML 已 sanitize，客户端只做 `dangerouslySetInnerHTML`，另外把
+    `/attachments/{uuid}` 的 `src` 换成 `attachment.content` 的 data URL、拆掉包着图片的
+    `<a>`（私有地址点了 404）。旧 Host 回 `unknown-operation` 时预览页签写「重启 Harness」。
+    工具栏是纯文本插入（`applyEditorTool` 纯函数），别改成 contenteditable/WYSIWYG。
+    附件卡片「移除文件」= 删正文引用 + 按附件 id 删远端（拿不到 id 只删引用）。
 
 ## 代码风格
 
@@ -236,6 +243,10 @@ node --check index.js && node --check client.js
   文案）→ 同步 README 的「界面长什么样」、「线上协议」、`too-large`、「只能在浏览器里看的」第 21 条
   与「已知边界」，[IMPLEMENTATION.md](IMPLEMENTATION.md) 的「正文贴图」与「图片为什么要 Host 代取」
   两节；`tests/client.test.mjs` 里那八条、`tests/host.test.mjs` 里那条附件字节用例跟着改。
+- **动「编辑器外壳 / 预览」**（页签、工具栏动作、预览来源与降级、附件卡片）→ 同步 README 的
+  「界面长什么样」、「线上协议」、「只能在浏览器里看的」第 22 条与「已知边界」，
+  [IMPLEMENTATION.md](IMPLEMENTATION.md) 的「编辑器外壳」一节；`tests/client.test.mjs` 里那四条
+  编辑器用例跟着改。
 - **改文案键** → `zh` 与 `en` 一起改（探针会拦）。
 - **已知边界**写在 README 末尾；**没真正解决之前不要从文档里删掉**。
 

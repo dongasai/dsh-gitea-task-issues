@@ -282,7 +282,28 @@ Gitea 网页版看起来「创建前就能传图」，靠的是两条别的东�
 - **只认图片这一种 markdown**：面板不是 markdown 渲染器，标题 / 列表 / 代码块照旧按纯文本。
   拉不到图时显示**可见的**说明（`title` 悬停不算），旧 Host 下点明「重启 Harness」。
 
-## 分页与上限
+### 编辑器外壳：预览为什么用 Gitea 的 `/markdown`
+
+用户要的是「编辑时能切换预览，UI 照 Gitea / GitHub」。列表编辑器那套外壳（撰写 / 预览页签、
+工具栏、附件卡片）是纯前端，好办；**预览**如果自己手写一个 markdown 渲染器，结果一定是半吊子：
+标题能渲染、表格和代码块就开始走样，和用户天天看的 Gitea 网页对不上。所以预览直接调 Gitea：
+
+- `POST /markdown`（`markdown.render`）把正文渲染成 HTML。**字段名是 Go 导出名**（`Text` /
+  `Mode` / `Context`，没有 json tag）—— 传小写会静默得到空 body（本机实测）。
+- `Mode: 'markdown'` 时附件图是相对路径 `/attachments/{uuid}`；私有仓库下浏览器打不开，
+  所以预览 HTML 里的 `<img src>` 用 `attachment.content` 取到的 data URL 替换，并把包着图片的
+  `<a>` 拆掉（那个链接也指向私有地址，点了只会 404）。
+- HTML 由 Gitea 侧 sanitize，我们只做 `dangerouslySetInnerHTML`，不再二次拼 HTML；
+  额外注入的只有 data URL。
+- 预览请求防抖 200ms；旧 Host 没有 `markdown.render` 时回 `unknown-operation`，页签里写
+  「预览需要重启 Harness」，不白屏、不影响正文编辑。
+
+工具栏是**纯文本插入**（`applyEditorTool` 纯函数：给正文 + 选区 → 新正文 + 光标位置），
+不做 WYSIWYG —— 光标位置要能稳定回填，而 `contenteditable` 在 DSH 的迷你 React 探针里测不了。
+附件卡片的元数据来自三处：上传成功的返回、编辑时 `issue.assets.list`、内存里的
+`ATTACHMENT_META`；「移除文件」= 删正文引用 + 按 id 删远端附件（拿不到 id 时只删引用）。
+
+## 分页与上限## 分页与上限
 
 Swagger 里**没有**任何 `limit` 的 `maximum`，实际上限来自 `GET /settings/api` 的
 `max_response_items`。插件按 50 请求、最多 100，列表不自动翻页；`total` 取自上游的

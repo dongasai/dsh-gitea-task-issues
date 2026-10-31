@@ -545,6 +545,28 @@ API 没有「下载附件内容」的端点（`GET …/assets/{id}` 只回元数
 
 `Repository` 常用字段（列表页只需要少数几个）：`id`(int64) / `name`(string) / `full_name`(string) / `owner.login`(User) / `private`(boolean) / `archived`(boolean) / `empty`(boolean) / `html_url`(string) / `default_branch`(string) / `updated_at`(date-time)。
 
+### 12.1 markdown 渲染
+
+| 方法 路径 | 用途 | 请求体 | 成功响应 |
+| --- | --- | --- | --- |
+| `POST /markdown` | 把 markdown 渲染成 HTML（编辑器预览） | `MarkdownOption` | `200` → `text/html`（字符串） |
+| `POST /markdown/raw` | 把 `text/plain` 原文渲染成 HTML | 纯文本 body | `200` → `text/html` |
+
+`operationId`：`renderMarkdown` / `renderMarkdownRaw`。
+
+**`MarkdownOption` 字段名是 Go 的导出名、没有 json tag**：必须传 `Text` / `Mode` / `Context` /
+`Wiki`（首字母大写）。传小写会被**静默忽略**，接口返回 `200` + **空 body**，看起来像「渲染坏了」。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `Text` | string | 要渲染的 markdown |
+| `Mode` | string | `markdown`（默认，附件图用相对路径 `/attachments/{uuid}`）/ `gfm`（绝对 `/media/attachments/…`）/ `comment` / `wiki` / `file` |
+| `Context` | string | 渲染上下文，形如 `/owner/repo`（决定相对链接怎么解析） |
+| `Wiki` | boolean | 已废弃，用 `Mode: wiki` |
+
+返回的 HTML 已由 Gitea 侧 sanitize；私有仓库里的图片地址（`/attachments/{uuid}`）浏览器直接打开
+仍是 404，需要另行带令牌取（见 3.6）。
+
 ---
 
 ## 13. 通用查询参数与分页

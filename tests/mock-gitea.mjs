@@ -91,6 +91,16 @@ export async function startMockGitea() {
       const segments = path.split('/').filter((part) => part !== '')
 
       if (path === '/version') return send(200, { version: '1.27.3' })
+      // 编辑器「预览」用：Gitea 的 /markdown 返回 text/html（字段名是 Text/Mode/Context）。
+      if (path === '/markdown') {
+        const body = await readBody()
+        const source = String(body?.Text ?? '')
+        const html = `<p dir="auto">${source.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</p>`
+        res.statusCode = 200
+        res.setHeader('content-type', 'text/html; charset=utf-8')
+        res.end(html)
+        return
+      }
       if (path === '/user') return send(200, { login: 'tester', full_name: 'Tester', avatar_url: null })
 
       // /repos/search 与 /user/repos

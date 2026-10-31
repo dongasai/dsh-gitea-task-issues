@@ -201,10 +201,15 @@ issues（工具没有仓库参数，见「与 Agent 的关系」）。
   然后是**依赖**（被谁挡住）、**阻塞**（挡住谁）、**工时**（列表 + 登记 + 删除 + 清空）、
   **附件**（列表 + 上传 + 删除）、**评论**（列表 + 发表 + 编辑 + 删除）。
 - 新建 / 编辑是同一张表单：标题、正文、标签（点选）、指派（点选）、里程碑、截止日。
-  **正文可以贴图**：正文框里直接粘贴（Ctrl/Cmd+V）或把图片拖进去，也可以点「插入图片」选文件；
-  图片传到 Gitea 后，正文里自动多出 `![文件名](/attachments/<uuid>)`，**框下方立刻出现缩略图预览**。
-  编辑时插在**光标处**，新建时先攒着、创建成功后**追加到正文末尾**（原因见「已知边界」）。
-  评论框同样支持贴图；发表后图片在评论里直接显示。
+  **正文编辑器照 Gitea / GitHub 的样子做**：顶部 **撰写 / 预览** 两个页签，中间一排工具栏
+  （H1–H3、加粗 / 斜体 / 删除线、引用、行内代码 / 代码块、链接、无序 / 有序 / 任务列表、表格），
+  下面是输入框，底部是**附件卡片**（缩略图 + 文件名 + 体积 + 「移除文件 / 复制链接」）。
+  **预览**调 Gitea 自己的 `POST /markdown`（服务端已 sanitize），看到的就是 Gitea 网页里那套
+  渲染，不是我们另写的半吊子 markdown。**正文可以贴图**：正文框里直接粘贴（Ctrl/Cmd+V）或把
+  图片拖进去，也可以点「插入图片」选文件；图片传到 Gitea 后，正文里自动多出
+  `![文件名](/attachments/<uuid>)`，**附件卡片立刻出现缩略图**。编辑时插在**光标处**，新建时
+  先攒着、创建成功后**追加到正文末尾**（原因见「已知边界」）。评论框是同一个编辑器外壳；
+  发表后图片在评论里直接显示。
   **编辑不是一次请求**：Gitea 的编辑接口没有标签字段，标签走 `/labels` 的整体替换，
   指派按增删做差分 —— 界面上仍然只是「保存」一次。
 - 绑定设置页：显示工作区根、自动侦测结果、当前生效的仓库，以及服务器 + `owner/name` 表单。
@@ -427,7 +432,7 @@ content-type: application/json
 | `presets.list` | Agent 预设名册：`available` / `defaultId` / `presets[{ id, name, description, isDefault, broken }]`（自动分配选「模式」用；宿主没挂名册时 `available: false`） |
 | `repo.list` / `repo.meta` | 仓库选择器 / 仓库 + 标签 + 里程碑 + 可指派候选 |
 | `issue.detail` | issue 详情一揽子（正文 + 评论 + 附件 + 工时 + 依赖 + 阻塞 + 订阅状态） |
-| `gitea.ops` / `gitea.call` | 操作清单（60 条）/ 通用 Gitea 调用：`params.op` 取自操作表 |
+| `gitea.ops` / `gitea.call` | 操作清单（61 条）/ 通用 Gitea 调用：`params.op` 取自操作表 |
 | `watch.get` | 自动分配全量视图：`global` / `roots` / `watermarks` / `pending` / `deliveries`（最近 50 条）/ `status` / 账本路径 |
 | `watch.set` | 改配置：`global` 局部更新，或 `root` + `rootConfig`（`rootConfig: null` 表示删掉）。**不接受 `serverId`/`owner`/`repo`**，目标仓库一律由当前工作区绑定解析 |
 | `watch.tick` | 立即跑一轮（不受间隔限制），回 `{ summary, status }` |
@@ -437,7 +442,9 @@ content-type: application/json
 `params` 里都认。操作表里只有 `attachment.content` **不走 `/api/v1`**：它取
 `GET {baseUrl}/attachments/{uuid}` 的原始字节（Gitea 的 web 路由，令牌可用），回
 `{ base64, contentType, size }`，给界面内嵌图片用；单张超过 10 MiB 回 `too-large`（界面显示
-「去 Gitea 看」而不是硬渲染）。仓库 / issue 级操作缺 `owner` / `repo` 时按工作区绑定补；**补不出来就报原始原因**
+「去 Gitea 看」而不是硬渲染）。编辑器「预览」走 `markdown.render`（`POST /markdown`）：
+它把 `text` / `context` 渲染成 HTML 字符串返回，字段名由 Host 拼成 Gitea 要的 `Text` / `Mode` /
+`Context`（这套 swagger 没有 json tag，小写会被静默忽略）。仓库 / issue 级操作缺 `owner` / `repo` 时按工作区绑定补；**补不出来就报原始原因**
 （`no-binding` / `no-server-for-host` / `root-required`），不会带着空值去撞参数校验。
 
 `data` 的形状由 [lib/shape.js](lib/shape.js) 决定（瘦身 + 把 `repository.owner.login` 拍平成
@@ -545,14 +552,14 @@ Host 回来的原始说明 —— 多数是英文，左列括号里给出它的 
 | 检查 | 命令 | 期望 |
 |---|---|---|
 | 两半语法 | `node --check index.js && node --check client.js`（或 `npm run check`） | 退出码 0 |
-| 全部探针 | `node --test tests/*.test.mjs`（或 `npm test`） | 125 个用例全过 |
+| 全部探针 | `node --test tests/*.test.mjs`（或 `npm test`） | 130 个用例全过 |
 
 **探针覆盖了什么**（都在本地，不需要网络）：
 
 | 文件 | 覆盖 |
 |---|---|
-| [tests/host.test.mjs](tests/host.test.mjs) | 37 例：地址与 git remote 解析、配置存储（原子写 / 乐观并发 / 坏文件留档）、绑定与自动侦测、issue / 评论 / 附件 / 指派 / 依赖 / 订阅 / 置顶 / 锁定 / 工时全链路、上游失败映射、**界面调用形状的回归**、7 个工具（出参过注册表自己的校验器）、**工作区隔离**（参数集 + 换工作区就换仓库）、**`watch.*` 四个操作**（参数收敛 / 仓库只认绑定 / 错误码）、**`presets.list`** 名册透传与缺席降级 |
-| [tests/client.test.mjs](tests/client.test.mjs) | 51 例：用[迷你 React](tests/mini-react.mjs) 真渲染组件树并点交互（进详情 / **新建**（默认按已绑定工作区选目标、唯一绑定时预选、手动挡兜底、切档后目标不串、无绑定时不卡死）/ 切筛选 / 探活 / 绑定设置 / **全局看板范围**（只查已绑定仓库、同仓库多工作区去重、无绑定时不取数并给引导）/ **自动投递徽标**（开启、演练/仓库变更/无会话服务三档、关闭与未配置不显示、点开即入口、倒计时按秒走与到点自愈）/ **自动分配面板**：入口可达、开关与保存真打对应 op、**模式下拉**（名册→id、坏行禁用、无名册退回手填、旧宿主提示重启、缺项保留）、服务缺席亮横幅、**同项目活跃会话上限**（可调并随保存下发、上限挡下的投递记录可读）、**正文贴图**（编辑即传并插到光标、新建先攒后传再补正文、评论贴图进草稿、非图片被拒且不吞粘贴、新建上传失败不重复建 issue）、**图片内嵌**（正文/评论里的图片 markdown 渲染成 `<img>`、编辑表单缩略预览、旧 Host 退化成「重启 Harness」提示）） |
+| [tests/host.test.mjs](tests/host.test.mjs) | 38 例：地址与 git remote 解析、配置存储（原子写 / 乐观并发 / 坏文件留档）、绑定与自动侦测、issue / 评论 / 附件 / 指派 / 依赖 / 订阅 / 置顶 / 锁定 / 工时全链路、上游失败映射、**界面调用形状的回归**、7 个工具（出参过注册表自己的校验器）、**工作区隔离**（参数集 + 换工作区就换仓库）、**`watch.*` 四个操作**（参数收敛 / 仓库只认绑定 / 错误码）、**`presets.list`** 名册透传与缺席降级 |
+| [tests/client.test.mjs](tests/client.test.mjs) | 55 例：用[迷你 React](tests/mini-react.mjs) 真渲染组件树并点交互（进详情 / **新建**（默认按已绑定工作区选目标、唯一绑定时预选、手动挡兜底、切档后目标不串、无绑定时不卡死）/ 切筛选 / 探活 / 绑定设置 / **全局看板范围**（只查已绑定仓库、同仓库多工作区去重、无绑定时不取数并给引导）/ **自动投递徽标**（开启、演练/仓库变更/无会话服务三档、关闭与未配置不显示、点开即入口、倒计时按秒走与到点自愈）/ **自动分配面板**：入口可达、开关与保存真打对应 op、**模式下拉**（名册→id、坏行禁用、无名册退回手填、旧宿主提示重启、缺项保留）、服务缺席亮横幅、**同项目活跃会话上限**（可调并随保存下发、上限挡下的投递记录可读）、**正文贴图**（编辑即传并插到光标、新建先攒后传再补正文、评论贴图进草稿、非图片被拒且不吞粘贴、新建上传失败不重复建 issue）、**图片内嵌**（正文/评论里的图片 markdown 渲染成 `<img>`、旧 Host 退化成「重启 Harness」提示）、**编辑器外壳**（撰写 / 预览两页签、工具栏插语法、附件卡片移除文件、旧 Host 预览降级）） |
 | [tests/triggers.test.mjs](tests/triggers.test.mjs) | 14 例：**自动分配的触发矩阵**（纯函数）——首次基线零投递、三类触发、自评不触发、认不出用户名时 fail-safe、多类同时命中的指纹处理、冷却与每日上限 |
 | [tests/watch.test.mjs](tests/watch.test.mjs) | 21 例：**自动分配的投递路径**（假 Gitea + 假会话服务 + 注入时钟）——请求形状（`assigned` / `since`）、忙跳过且保留待办、只投一次、每小时配额、开会话失败、服务缺席降级、跨进程锁与过期抢占、重放、连续失败退避后归零、**改间隔/关总闸立刻重排**、**同项目活跃会话上限（默认 1 与调到 3 两档）** |
 | [tests/catalog.test.mjs](tests/catalog.test.mjs) | 2 例：注册面与官方槽位目录对照（键存在、基数要求的注册项齐全、`main` 不撞保留键、面板 `order > 10`） |
@@ -660,6 +667,13 @@ subscription.check / subscribers / pinned）。`forbidden` 与 `not-found` 记�
     评论框里贴图 → 发表后评论里直接显示图片。粘贴 / 拖入**非图片文件**应提示「只支持图片文件」，
     普通文字粘贴必须照旧生效（不能被拦掉）。正文里超过 10 MiB 的图片不内嵌，显示一句说明。
 
+22. **编辑器外壳**：详情 → 编辑。正文框上方应看到 **撰写 / 预览** 两个页签、一排工具栏；
+    点「预览」应显示出和 Gitea 网页一致的排版（标题 / 列表 / 代码块 / 表格 / 图片），图片是
+    内嵌出来的；点一次「B」按钮，正文里应插入 `**粗体**`。上传一张图后，编辑器底部出现附件卡片
+    （缩略图 + 文件名 + 体积），点「移除文件」正文里的引用应消失、远端附件也被删掉。
+    旧 Host 没有 `markdown.render` 时，预览页签显示「预览需要重启 Harness」，不是白屏。
+    评论框同样有撰写 / 预览页签。
+
 ## 已知边界
 
 - **issue 编辑不带乐观锁**：Gitea 的 `PATCH /issues/{index}` 支持 `content_version` 做冲突检测，
@@ -689,9 +703,14 @@ subscription.check / subscribers / pinned）。`forbidden` 与 `not-found` 记�
   图一起失效。
 - **取消编辑不撤回已上传的图**：上传发生在点「保存」之前（Gitea 网页版同样如此），附件会留在
   issue 的「附件」列表里，正文里没有引用。
-- **面板只渲染「图片」这一种 markdown**：正文 / 评论里的 `![alt](/attachments/<uuid>)` 与
-  `![alt](http…)` 会显示成图，标题 / 列表 / 代码块 / 粗体这些照旧按纯文本显示 —— 这里不是
-  markdown 渲染器，只单独认图片（用户上传后唯一需要「看见」的东西）。
+- **详情页只渲染「图片」这一种 markdown**：正文 / 评论里的 `![alt](/attachments/<uuid>)` 与
+  `![alt](http…)` 会显示成图，标题 / 列表 / 代码块 / 粗体这些照旧按纯文本显示 —— 详情页不是
+  markdown 渲染器。**编辑器的「预览」页签不一样**：那里调 Gitea 的 `POST /markdown` 渲染完整
+  markdown（与 Gitea 网页一致，HTML 由 Gitea 侧 sanitize），图片地址再换成 Host 代取的 data URL。
+- **预览要一次 Host 往返**：`markdown.render` 是新加的 Host 操作，旧 Host 会回
+  `unknown-operation`，界面显示「预览需要重启 Harness」；正文编辑与徽标都不受影响。
+- **附件卡片只能管「正文里引用到的图」**：详情页「附件」区里那些没写进正文的文件不会出现在
+  编辑器卡片里（Gitea 网页版也是这样）。
 - **图片由 Host 代取字节**：浏览器拿不到 Gitea 令牌，私有仓库的 `/attachments/{uuid}` 直接
   `<img>` 是 404（本机实测），所以界面走 `attachment.content` 由 Host 带令牌取回、转成 data URL。
   单张上限 10 MiB，超了显示说明而不是硬塞。**Host 侧新代码要重启 Harness 才生效**；旧 Host 下

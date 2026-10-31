@@ -514,6 +514,17 @@ test('附件字节：`/attachments/{uuid}` 由 Host 代取（web 路由 + 令牌
   assert.equal(bad.body.code, 'bad-request')
 })
 
+test('markdown 预览：打 Gitea 的 /markdown，回 HTML（字段名是 Text/Mode/Context）', async () => {
+  const html = await ok('gitea.call', {
+    sessionId: SESSION_ID,
+    op: 'markdown.render',
+    params: { owner: 'dongasai', repo: 'mylike', text: '**粗体**' },
+  })
+  assert.equal(typeof html, 'string', '预览必须是 HTML 字符串，不是 JSON 对象')
+  assert.match(html, /<strong>粗体<\/strong>/)
+  assert.ok(world.gitea.requests.some((request) => request.path === '/api/v1/markdown'), '没有打到 /markdown')
+})
+
 test('评论：发表 → 列表 → 编辑', async () => {
   const comment = await ok('gitea.call', {
     sessionId: SESSION_ID,

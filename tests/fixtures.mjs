@@ -160,11 +160,19 @@ export function bridgeAnswer(op, params) {
     if (inner === 'issue.labels.set') return { ok: true, data: FIXTURES.meta.labels }
     if (inner === 'issue.comments.create') return { ok: true, data: FIXTURES.detail.comments[0] }
     if (inner === 'issue.times.add') return { ok: true, data: FIXTURES.detail.times[0] }
+    if (inner === 'markdown.render') {
+      // 旧 Host 没有这个 op：编辑器预览要退化成「重启 Harness」提示。
+      if (FIXTURES.failMarkdown === true) return { ok: false, code: 'unknown-operation', message: 'unknown operation "markdown.render"' }
+      const text = String(params?.params?.text ?? '')
+      return { ok: true, data: `<p dir="auto">${text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</p>` }
+    }
     if (inner === 'attachment.content') {
       // 旧 Host 没有这个 op：界面要退化成「重启 Harness」提示，而不是破图。
       if (FIXTURES.failAttachment === true) return { ok: false, code: 'unknown-operation', message: 'unknown operation "attachment.content"' }
       return { ok: true, data: { base64: 'iVBORw0KGgo=', contentType: 'image/png', size: 8 } }
     }
+    if (inner === 'issue.assets.list') return { ok: true, data: FIXTURES.detail.assets }
+    if (inner === 'issue.asset.delete') return { ok: true, data: null }
     if (inner === 'issue.assets.upload') {
       // 一次性失败开关：验「issue 已创建、图片没传上去」这条半成功路径（不重复建 issue）。
       if (FIXTURES.failUploadOnce === true) {

@@ -1236,8 +1236,8 @@ test('新建 issue：图片先攒着，创建成功后上传并追加到正文�
   input.props.onChange({ target: { files: [imageFile()], value: '' } })
   await flush()
   await mini.render(mini.React.createElement(GlobalBoard, {}))
-  assert.equal(findNode(mini, (node) => node.props?.['data-gti-image-queue'] !== undefined).props['data-gti-image-queue'], '1',
-    '新建时图片应当先进入待上传列表')
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-attachments'] !== undefined).props['data-gti-attachments'], '1',
+    '新建时图片应当先进入待上传卡片')
   assert.equal(calls.filter((call) => call.params?.op === 'issue.assets.upload').length, 0,
     '新建时还没有 issue 编号，不该先发上传请求')
 
@@ -1390,7 +1390,7 @@ test('编辑表单：贴进来的图片立刻出缩略预览（不再只看到�
   body.props.onPaste(fileEvent(imageFile()))
   await flush()
   await mini.render(mini.React.createElement(GlobalBoard, {}))
-  const previews = mini.nodes.filter((node) => node.type === 'img' && String(node.props?.className).includes('dsh-gti-image-preview'))
+  const previews = mini.nodes.filter((node) => node.type === 'img' && String(node.props?.className).includes('dsh-gti-attachment-thumb'))
   assert.equal(previews.length, 1, '上传成功后表单里应有缩略图预览')
   assert.match(String(previews[0].props.src), /^data:image\/png;base64,/, '预览直接用上传时的字节，不必等 Host 代理')
   assert.ok(calls.every((call) => call.params?.op !== 'attachment.content'), '刚上传的图不该再走一遍 Host 代取')
@@ -1414,4 +1414,76 @@ test('旧 Host 没有附件代理：正文图片位退化成「重启 Harness」
     FIXTURES.detail.issue.body = savedBody
     delete FIXTURES.failAttachment
   }
+})
+
+// ── 编辑器外壳：撰写 / 预览、工具栏、附件卡片 ─────────────────────────────
+
+/** 打开「编辑 issue」表单，返回 `{ mini, GlobalBoard }`。 */
+async function openEditForm() {
+  const { fake, mini } = await newWorld()
+  const GlobalBoard = fake.slots.find((entry) => entry.options.name === 'main').component
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => typeof node.props?.['data-gti-issue'] === 'string').props.onClick(FIXTURES.issues[0])
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  findNode(mini, (node) => node.props?.['data-gti-edit'] === 'true').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  return { mini, GlobalBoard }
+}
+
+test('编辑器：撰写 / 预览两个页签，预览走 Gitea 的 markdown 渲染', async () => {
+  const { mini, GlobalBoard } = await openEditForm()
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-editor-tab'] === 'write').props['data-active'], 'true')
+  const tabs = mini.nodes.filter((node) => node.props?.['data-gti-editor-tab'] !== undefined)
+  assert.deepEqual(tabs.map((node) => node.props['data-gti-editor-tab']), ['write', 'preview'])
+
+  findNode(mini, (node) => node.props?.['data-gti-editor-tab'] === 'preview').props.onClick()
+  // 先渲染一轮让 effect 登记预览请求，再等防抖到期，最后再渲染出结果。
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  await new Promise((resolve) => setTimeout(resolve, 260))
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const preview = findNode(mini, (node) => node.props?.['data-gti-preview-html'] === 'true')
+  assert.ok(preview, '预览页签里应有渲染结果')
+  assert.match(preview.props.dangerouslySetInnerHTML.__html, /正文内容/, '预览内容应来自正文')
+  assert.ok(calls.some((call) => call.params?.op === 'markdown.render'), '预览没有调 Gitea 的 markdown 渲染')
+})
+
+test('编辑器：工具栏按钮把 markdown 语法插进正文', async () => {
+  const { mini, GlobalBoard } = await openEditForm()
+  findNode(mini, (node) => node.props?.['data-gti-editor-tool'] === 'bold').props.onClick()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const body = findNode(mini, (node) => node.props?.['data-gti-form-body'] !== undefined)
+  assert.match(body.props.value, /\*\*粗体\*\*/, '加粗按钮应当插入 **粗体**')
+})
+
+test('编辑器：旧 Host 没有 markdown.render 时，预览页签说清楚要重启 Harness', async () => {
+  const { mini, GlobalBoard } = await openEditForm()
+  try {
+    FIXTURES.failMarkdown = true
+    findNode(mini, (node) => node.props?.['data-gti-editor-tab'] === 'preview').props.onClick()
+    await mini.render(mini.React.createElement(GlobalBoard, {}))
+    await new Promise((resolve) => setTimeout(resolve, 260))
+    const text = await mini.render(mini.React.createElement(GlobalBoard, {}))
+    assert.match(text, /重启 Harness/, '预览失败要给出可见的「重启 Harness」提示')
+  } finally {
+    delete FIXTURES.failMarkdown
+  }
+})
+
+test('编辑器：附件卡片显示文件名与体积，「移除文件」同时删正文引用与远端附件', async () => {
+  const { mini, GlobalBoard } = await openEditForm()
+  findNode(mini, (node) => node.props?.['data-gti-form-body'] !== undefined).props.onPaste(fileEvent(imageFile()))
+  await flush()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const card = findNode(mini, (node) => typeof node.props?.['data-gti-attachment-card'] === 'string')
+  assert.ok(card, '上传后应出现附件卡片')
+
+  calls.length = 0
+  findNode(mini, (node) => node.props?.['data-gti-attachment-remove'] !== undefined).props.onClick()
+  await flush()
+  await mini.render(mini.React.createElement(GlobalBoard, {}))
+  const body = findNode(mini, (node) => node.props?.['data-gti-form-body'] !== undefined)
+  assert.equal(body.props.value, '正文内容', '移除文件后正文里不该再有该图引用')
+  const deleted = calls.find((call) => call.params?.op === 'issue.asset.delete')
+  assert.ok(deleted, '移除文件应当删掉远端附件')
+  assert.equal(deleted.params.params.attachmentId, 9)
 })

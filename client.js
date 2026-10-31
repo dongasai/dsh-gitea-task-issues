@@ -239,6 +239,39 @@ window.__ModuleLoader__.load({
       'image.loading': '图片加载中…',
       'image.unavailable': '图片「{name}」暂时不能内嵌显示',
       'image.needsRestart': '重启 Harness 后图片才能内嵌显示（Host 还没加载附件代理）',
+      'editor.write': '撰写',
+      'editor.preview': '预览',
+      'editor.previewEmpty': '没有可预览的内容。',
+      'editor.loading': '预览生成中…',
+      'editor.needsRestart': '预览需要重启 Harness（Host 还没加载 markdown 渲染）',
+      'editor.copyLink': '复制链接',
+      'editor.copied': '链接已复制',
+      'editor.removeFile': '移除文件',
+      'editor.attachments': '附件',
+      'editor.tool.h1': '一级标题',
+      'editor.tool.h2': '二级标题',
+      'editor.tool.h3': '三级标题',
+      'editor.tool.bold': '加粗',
+      'editor.tool.italic': '斜体',
+      'editor.tool.strike': '删除线',
+      'editor.tool.quote': '引用',
+      'editor.tool.code': '行内代码',
+      'editor.tool.codeblock': '代码块',
+      'editor.tool.link': '链接',
+      'editor.tool.ul': '无序列表',
+      'editor.tool.ol': '有序列表',
+      'editor.tool.task': '任务列表',
+      'editor.tool.table': '表格',
+      'editor.ph.bold': '粗体',
+      'editor.ph.italic': '斜体',
+      'editor.ph.strike': '删除线',
+      'editor.ph.code': '代码',
+      'editor.ph.link': '链接',
+      'editor.ph.heading': '标题',
+      'editor.ph.item': '列表项',
+      'editor.ph.task': '任务',
+      'editor.ph.quote': '引用',
+      'editor.ph.table': '| 列 1 | 列 2 |\n| --- | --- |\n| 内容 | 内容 |',
 
       'deps.title': '依赖（被这些挡住）',
       'deps.empty': '没有依赖。',
@@ -530,6 +563,39 @@ window.__ModuleLoader__.load({
       'image.loading': 'Loading image…',
       'image.unavailable': 'Image "{name}" cannot be shown inline yet',
       'image.needsRestart': 'Restart the Harness to show images inline (the host has not loaded the attachment proxy yet)',
+      'editor.write': 'Write',
+      'editor.preview': 'Preview',
+      'editor.previewEmpty': 'Nothing to preview yet.',
+      'editor.loading': 'Rendering preview…',
+      'editor.needsRestart': 'Preview needs a Harness restart (the host has not loaded the markdown renderer yet)',
+      'editor.copyLink': 'Copy link',
+      'editor.copied': 'Link copied',
+      'editor.removeFile': 'Remove file',
+      'editor.attachments': 'Attachments',
+      'editor.tool.h1': 'Heading 1',
+      'editor.tool.h2': 'Heading 2',
+      'editor.tool.h3': 'Heading 3',
+      'editor.tool.bold': 'Bold',
+      'editor.tool.italic': 'Italic',
+      'editor.tool.strike': 'Strikethrough',
+      'editor.tool.quote': 'Quote',
+      'editor.tool.code': 'Inline code',
+      'editor.tool.codeblock': 'Code block',
+      'editor.tool.link': 'Link',
+      'editor.tool.ul': 'Bullet list',
+      'editor.tool.ol': 'Numbered list',
+      'editor.tool.task': 'Task list',
+      'editor.tool.table': 'Table',
+      'editor.ph.bold': 'bold',
+      'editor.ph.italic': 'italic',
+      'editor.ph.strike': 'strike',
+      'editor.ph.code': 'code',
+      'editor.ph.link': 'link',
+      'editor.ph.heading': 'Heading',
+      'editor.ph.item': 'Item',
+      'editor.ph.task': 'Task',
+      'editor.ph.quote': 'Quote',
+      'editor.ph.table': '| Column 1 | Column 2 |\n| --- | --- |\n| cell | cell |',
 
       'deps.title': 'Depends on (blocked by)',
       'deps.empty': 'No dependencies.',
@@ -735,10 +801,46 @@ window.__ModuleLoader__.load({
 .dsh-gti-choice{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;border:.5px solid var(--dsw-alias-border-l2);font-size:11px;cursor:pointer;user-select:none}
 .dsh-gti-choice[data-on="true"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
 .dsh-gti-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.dsh-gti-actions[data-align="end"]{justify-content:flex-end}
 /* 正文贴图：按钮与隐藏 file input 同一行；新建时攒着的图片用 chip 排开，逐张可移除。 */
 .dsh-gti-image-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px}
 .dsh-gti-image-queue{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .dsh-gti-image-queue .dsh-gti-icon-button{width:18px;height:18px;font-size:12px;line-height:1}
+/* markdown 编辑器（照 Gitea / GitHub 的样子）：页签 + 工具栏 + 输入框 + 附件卡片。 */
+.dsh-gti-editor{display:flex;flex-direction:column;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,6px);overflow:hidden;background:var(--dsw-alias-bg-base)}
+.dsh-gti-editor-tabs{display:flex;align-items:flex-end;gap:2px;padding:4px 6px 0;background:var(--dsw-alias-bg-layer-2);border-bottom:.5px solid var(--dsw-alias-border-l1)}
+.dsh-gti-editor-tab{font:inherit;font-size:12px;padding:4px 10px;border:.5px solid transparent;border-bottom:none;border-radius:var(--dsw-radius-sm,6px) var(--dsw-radius-sm,6px) 0 0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dsh-gti-editor-tab[data-active="true"]{background:var(--dsw-alias-bg-base);border-color:var(--dsw-alias-border-l1);color:var(--dsw-alias-label-primary)}
+.dsh-gti-editor-toolbar{display:flex;align-items:center;gap:2px;flex-wrap:wrap;padding:4px 6px;border-bottom:.5px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary)}
+.dsh-gti-editor-tool{font:inherit;font-size:12px;line-height:18px;min-width:24px;padding:2px 5px;border:none;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:inherit;cursor:pointer}
+.dsh-gti-editor-tool:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary)}
+.dsh-gti-editor-tool:disabled{opacity:.4;cursor:not-allowed}
+.dsh-gti-editor-box{padding:6px 10px}
+.dsh-gti-editor-textarea{display:block;width:100%;box-sizing:border-box;min-height:140px;resize:vertical;border:none;outline:none;background:transparent;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;line-height:1.7}
+.dsh-gti-editor-preview{min-height:140px;padding:8px 12px}
+.dsh-gti-editor-attachments{display:flex;flex-wrap:wrap;gap:8px;padding:8px 10px;border-top:.5px dashed var(--dsw-alias-border-l2)}
+.dsh-gti-attachment-card{display:flex;flex-direction:column;align-items:center;gap:2px;width:104px;padding:6px;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2)}
+.dsh-gti-attachment-thumb{width:92px;height:56px;object-fit:cover;border-radius:2px;background:var(--dsw-alias-bg-base);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-align:center}
+.dsh-gti-attachment-name{max-width:100%;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh-gti-attachment-size{font-size:10px;color:var(--dsw-alias-label-tertiary)}
+.dsh-gti-attachment-hint{font-size:10px;color:var(--dsw-alias-state-warn-primary);text-align:center}
+.dsh-gti-attachment-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.dsh-gti-link-button{font:inherit;font-size:10px;padding:0;border:none;background:none;color:var(--dsw-alias-brand-primary);cursor:pointer}
+.dsh-gti-link-button:hover{text-decoration:underline}
+/* 预览区：只给 Gitea 渲染出的常用标签一点基本排版（颜色仍走主题令牌）。 */
+.dsh-gti-markdown{font-size:12px;line-height:1.65;overflow-wrap:anywhere}
+.dsh-gti-markdown h1,.dsh-gti-markdown h2,.dsh-gti-markdown h3{margin:10px 0 6px;font-weight:600;line-height:1.3}
+.dsh-gti-markdown h1{font-size:17px}.dsh-gti-markdown h2{font-size:15px}.dsh-gti-markdown h3{font-size:13px}
+.dsh-gti-markdown p{margin:6px 0}
+.dsh-gti-markdown ul,.dsh-gti-markdown ol{margin:6px 0;padding-left:22px}
+.dsh-gti-markdown blockquote{margin:6px 0;padding:2px 10px;border-left:3px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
+.dsh-gti-markdown code{font-family:var(--dsw-font-mono,ui-monospace,monospace);font-size:11px;padding:1px 4px;border-radius:3px;background:var(--dsw-alias-bg-layer-2)}
+.dsh-gti-markdown pre{margin:6px 0;padding:8px 10px;overflow:auto;border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2)}
+.dsh-gti-markdown pre code{padding:0;background:none}
+.dsh-gti-markdown table{border-collapse:collapse;margin:6px 0}
+.dsh-gti-markdown th,.dsh-gti-markdown td{border:.5px solid var(--dsw-alias-border-l2);padding:3px 8px}
+.dsh-gti-markdown img{max-width:100%;height:auto}
+.dsh-gti-markdown a{color:var(--dsw-alias-brand-primary)}
 /* 正文里的图片按块级铺满可用宽度；加载中 / 拉不到时退化成一行说明，不留破图。 */
 .dsh-gti-inline-image{display:block;max-width:100%;height:auto;margin:6px 0;border-radius:var(--dsw-radius-sm,6px)}
 .dsh-gti-image-loading,.dsh-gti-image-fallback{display:inline-block;font-size:12px;color:var(--dsw-alias-label-tertiary);font-style:italic}
@@ -1080,6 +1182,7 @@ window.__ModuleLoader__.load({
       if (typeof uuid !== 'string' || uuid === '') return { ok: false, message: t('image.noUuid') }
       // 字节已经在手里了，顺手留一份 data URL：刚上传的图**立刻**能显示，不必等 Host 代理往返
       //（Host 代理是给「重开页面 / 别人上传的图」兜底的）。
+      rememberAsset({ ...(result.data ?? {}), uuid, name: result.data?.name ?? file.name, size: result.data?.size ?? file.size })
       return { ok: true, uuid, dataUrl: `data:${contentType};base64,${dataBase64}`, markdown: imageMarkdown(file.name, uuid) }
     }
 
@@ -1097,21 +1200,55 @@ window.__ModuleLoader__.load({
       return `${serverId ?? ''}\u0000${String(uuid).toLowerCase()}`
     }
 
+    /**
+     * 附件元数据（uuid → `{ id, name, size, downloadUrl }`）：编辑器里的附件卡片要显示文件名、
+     * 体积，并在「移除文件」时按 id 删远端。上传成功时顺手登记；编辑已有 issue 时由
+     * `issue.assets.list` 补全。
+     */
+    const ATTACHMENT_META = new Map()
+
+    /** 把一份附件（线上形状）登记进元数据表。 */
+    function rememberAsset(asset) {
+      if (asset === null || asset === undefined || typeof asset !== 'object') return
+      const uuid = typeof asset.uuid === 'string' ? asset.uuid.toLowerCase() : null
+      if (uuid === null) return
+      ATTACHMENT_META.set(uuid, {
+        id: typeof asset.id === 'number' ? asset.id : null,
+        name: typeof asset.name === 'string' ? asset.name : null,
+        size: typeof asset.size === 'number' ? asset.size : null,
+        downloadUrl: typeof asset.downloadUrl === 'string' ? asset.downloadUrl : null,
+      })
+    }
+
     /** 从 markdown 图片地址里取附件 uuid；不是附件引用返回 null。 */
     function attachmentUuid(ref) {
       const match = /\/attachments\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[?#].*)?$/i.exec(String(ref ?? ''))
       return match === null ? null : match[1].toLowerCase()
     }
 
+    /** 正文里的图片引用：`![alt](ref)`；`uuid` 只在附件引用时才有。 */
+    function collectImageRefs(text) {
+      const out = []
+      const pattern = /!\[([^\]\n]*)\]\(([^)\s]+)\)/g
+      for (const match of String(text ?? '').matchAll(pattern)) {
+        out.push({ alt: match[1], ref: match[2], uuid: attachmentUuid(match[2]) })
+      }
+      return out
+    }
+
     /** 正文里引用到的附件 uuid（去重、保持出现顺序）。 */
     function collectAttachmentUuids(text) {
       const out = []
-      const pattern = /!\[[^\]\n]*\]\(([^)\s]+)\)/g
-      for (const match of String(text ?? '').matchAll(pattern)) {
-        const uuid = attachmentUuid(match[1])
-        if (uuid !== null && !out.includes(uuid)) out.push(uuid)
+      for (const item of collectImageRefs(text)) {
+        if (item.uuid !== null && !out.includes(item.uuid)) out.push(item.uuid)
       }
       return out
+    }
+
+    /** 把某个附件的图片引用从正文里删掉（编辑器卡片上的「移除文件」用）。 */
+    function removeImageRefs(text, uuid) {
+      const pattern = new RegExp(`!\\[[^\\]\\n]*\\]\\([^)\\s]*${String(uuid)}[^)\\s]*\\)\\n?`, 'gi')
+      return String(text ?? '').replace(pattern, '').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '')
     }
 
     /**
@@ -1231,38 +1368,6 @@ window.__ModuleLoader__.load({
       if (index === 0) return null
       if (last < source.length) nodes.push(source.slice(last))
       return nodes
-    }
-
-    /**
-     * 正文下方的图片缩略图预览（编辑表单与评论框共用）。
-     *
-     * 两个来源：正文里已经引用、且拿得到字节的附件图；新建 issue 时还没上传、用本地对象 URL
-     * 预览的待上传图。
-     * @param props - `api` / `t` / `serverId` / `text` / `queued`。
-     */
-    function ImagePreviews({ api, t, serverId, text, queued }) {
-      const uuids = collectAttachmentUuids(text)
-      const states = useAttachmentData(api, t, serverId, uuids)
-      const thumbs = []
-      for (const uuid of uuids) {
-        const entry = states[uuid]
-        if (entry !== undefined && entry.status === 'ready') {
-          thumbs.push(h('img', { key: `done-${uuid}`, className: 'dsh-gti-image-preview', src: entry.dataUrl, alt: uuid, loading: 'lazy' }))
-        } else if (entry !== undefined && entry.status === 'failed') {
-          const reason = entry.message === null || entry.message === undefined ? '' : `（${entry.message}）`
-          thumbs.push(h('span', {
-            key: `fail-${uuid}`,
-            className: 'dsh-gti-image-fallback',
-            'data-gti-image-preview-failed': uuid,
-          }, `${t('image.unavailable', { name: uuid })}${reason}`))
-        }
-      }
-      for (const item of queued ?? []) {
-        if (item.preview === null || item.preview === undefined) continue
-        thumbs.push(h('img', { key: `queued-${item.key}`, className: 'dsh-gti-image-preview', src: item.preview, alt: item.file.name, loading: 'lazy', 'data-gti-queued-image': item.key }))
-      }
-      if (thumbs.length === 0) return null
-      return h('div', { className: 'dsh-gti-image-previews', 'data-gti-image-previews': String(thumbs.length) }, thumbs)
     }
 
     /** 用 `t` 渲染失败信息：传输层失败与 Host 明确拒绝分开说。 */
@@ -1693,6 +1798,276 @@ window.__ModuleLoader__.load({
       return { queued, busy, notice, accept, remove, dropProps, setNotice }
     }
 
+    // ── markdown 编辑器外壳（撰写 / 预览 + 工具栏） ─────────────────────────
+
+    /** 工具栏：Gitea / GitHub 那一排（标题 / 粗斜删 / 引用代码链接 / 列表表格）。 */
+    const EDITOR_TOOLS = [
+      { id: 'h1', label: 'H1', titleKey: 'editor.tool.h1' },
+      { id: 'h2', label: 'H2', titleKey: 'editor.tool.h2' },
+      { id: 'h3', label: 'H3', titleKey: 'editor.tool.h3' },
+      { id: 'bold', label: 'B', titleKey: 'editor.tool.bold', weight: 700 },
+      { id: 'italic', label: 'I', titleKey: 'editor.tool.italic', italic: true },
+      { id: 'strike', label: 'S', titleKey: 'editor.tool.strike' },
+      { id: 'quote', label: '❝', titleKey: 'editor.tool.quote' },
+      { id: 'code', label: '</>', titleKey: 'editor.tool.code' },
+      { id: 'codeblock', label: '⌨', titleKey: 'editor.tool.codeblock' },
+      { id: 'link', label: '🔗', titleKey: 'editor.tool.link' },
+      { id: 'ul', label: '•', titleKey: 'editor.tool.ul' },
+      { id: 'ol', label: '1.', titleKey: 'editor.tool.ol' },
+      { id: 'task', label: '☑', titleKey: 'editor.tool.task' },
+      { id: 'table', label: '▦', titleKey: 'editor.tool.table' },
+    ]
+
+    /**
+     * 往正文里插一段 markdown（工具栏用）。纯函数：给正文 + 选区，回新正文与光标位置。
+     * @param text - 当前正文。
+     * @param selection - `{ start, end }`（没有就追加到末尾）。
+     * @param id - 工具 id（见 {@link EDITOR_TOOLS}）。
+     * @param t - 文案（占位文字）。
+     * @returns `{ text, caret }`。
+     */
+    function applyEditorTool(text, selection, id, t) {
+      const source = String(text ?? '')
+      const start = selection !== null && selection !== undefined && typeof selection.start === 'number'
+        ? Math.min(Math.max(selection.start, 0), source.length)
+        : source.length
+      const end = selection !== null && selection !== undefined && typeof selection.end === 'number'
+        ? Math.min(Math.max(selection.end, start), source.length)
+        : start
+      const picked = source.slice(start, end)
+      const lineStart = source.lastIndexOf('\n', start - 1) + 1
+      /** 包一层（没选中就放占位文字，光标落在后面）。 */
+      const wrap = (before, after, placeholder) => {
+        const inner = picked === '' ? placeholder : picked
+        return {
+          text: `${source.slice(0, start)}${before}${inner}${after}${source.slice(end)}`,
+          caret: start + before.length + inner.length + after.length,
+        }
+      }
+      /** 给选中的每一行加前缀。 */
+      const prefixLine = (prefix, placeholder) => {
+        const body = picked === '' ? placeholder : picked.split('\n').join(`\n${prefix}`)
+        return {
+          text: `${source.slice(0, lineStart)}${prefix}${source.slice(lineStart, start)}${body}${source.slice(end)}`,
+          caret: start + prefix.length + body.length,
+        }
+      }
+      const insertBlock = (block) => ({ text: `${source.slice(0, start)}${block}${source.slice(end)}`, caret: start + block.length })
+      switch (id) {
+        case 'h1': return prefixLine('# ', t('editor.ph.heading'))
+        case 'h2': return prefixLine('## ', t('editor.ph.heading'))
+        case 'h3': return prefixLine('### ', t('editor.ph.heading'))
+        case 'bold': return wrap('**', '**', t('editor.ph.bold'))
+        case 'italic': return wrap('*', '*', t('editor.ph.italic'))
+        case 'strike': return wrap('~~', '~~', t('editor.ph.strike'))
+        case 'code': return wrap('`', '`', t('editor.ph.code'))
+        case 'codeblock': return wrap('\n```\n', '\n```\n', t('editor.ph.code'))
+        case 'link': return wrap('[', '](url)', t('editor.ph.link'))
+        case 'quote': return prefixLine('> ', t('editor.ph.quote'))
+        case 'ul': return prefixLine('- ', t('editor.ph.item'))
+        case 'ol': return prefixLine('1. ', t('editor.ph.item'))
+        case 'task': return prefixLine('- [ ] ', t('editor.ph.task'))
+        case 'table': return insertBlock(`\n${t('editor.ph.table')}\n`)
+        default: return { text: source, caret: start }
+      }
+    }
+
+    /**
+     * 预览 HTML 里的附件图换成 data URL。
+     *
+     * Gitea 渲染出来的是 `src="/attachments/{uuid}"`（markdown 模式）或带 `/media/attachments/`
+     * 的绝对地址（gfm 模式），私有仓库里浏览器都拉不到；换成 Host 代取到的 data URL 才看得见。
+     * 顺带把图片外面那层指向私有地址的 `<a>` 拆掉，免得点图跳到 404。
+     * @param html - Gitea 渲染出的 HTML。
+     * @param states - `useAttachmentData` 的结果。
+     * @returns 处理后的 HTML。
+     */
+    function rewritePreviewHtml(html, states) {
+      return String(html ?? '')
+        .replace(/<a\b[^>]*>\s*(<img\b[^>]*\/attachments\/[^>]*>)\s*<\/a>/gi, '$1')
+        .replace(/(<img\b[^>]*?\bsrc=")([^"]+)(")/gi, (whole, head, source, tail) => {
+          const uuid = attachmentUuid(source)
+          if (uuid === null) return whole
+          const entry = states[uuid]
+          if (entry === undefined || entry.status !== 'ready') return whole
+          return `${head}${entry.dataUrl}${tail}`
+        })
+    }
+
+    /**
+     * 「预览」页签的数据：开关打开时调 Gitea 的 `POST /markdown`（服务端已 sanitize），
+     * 拿到 HTML。防抖 200ms，避免每敲一个字就打一次桥。
+     * @param api - 调用口。
+     * @param t - 文案。
+     * @param target - `{ serverId, owner, repo }`，没有就预览不了。
+     * @param text - markdown 正文。
+     * @param enabled - 是否处于预览页签。
+     * @returns `{ html, error }`。
+     */
+    function useMarkdownPreview(api, t, target, text, enabled) {
+      const [state, setState] = React.useState({ html: null, error: null })
+      const key = enabled ? String(text ?? '') : ''
+      React.useEffect(() => {
+        if (!enabled || target === null || target === undefined || String(key).trim() === '') {
+          setState((current) => (current.html === null && current.error === null ? current : { html: null, error: null }))
+          return () => {}
+        }
+        let alive = true
+        const timer = setTimeout(() => {
+          void (async () => {
+            const result = await api.gitea('markdown.render', {
+              serverId: target.serverId,
+              owner: target.owner,
+              repo: target.repo,
+              context: `/${target.owner}/${target.repo}`,
+              text: key,
+            })
+            if (!alive) return
+            if (result.ok && typeof result.data === 'string') setState({ html: result.data, error: null })
+            else setState({ html: null, error: result.code === 'unknown-operation' ? t('editor.needsRestart') : failureText(t, result) })
+          })()
+        }, 200)
+        return () => {
+          alive = false
+          clearTimeout(timer)
+        }
+      }, [api, t, enabled, target?.serverId, target?.owner, target?.repo, key])
+      return state
+    }
+
+    /**
+     * Gitea / GitHub 那种 markdown 编辑器外壳：**撰写 / 预览** 两个页签、一排工具栏，
+     * 下面是附件卡片区（调用方通过 `children` 塞进来）。
+     *
+     * 预览不自己写 markdown 渲染器：调 Gitea 的 `POST /markdown`（服务端已经 sanitize），
+     * 只把附件图地址换成 data URL。这样「预览」和 Gitea 网页里看到的是同一套渲染。
+     *
+     * @param props - `api` / `t` / `value` / `onChange` / `placeholder` / `previewTarget` /
+     *   `disabled` / `dropProps` / `bodyAttr` / `children` / `rows`。
+     */
+    function MarkdownEditor({ api, t, value, onChange, placeholder, previewTarget, disabled, dropProps, bodyAttr, children, rows }) {
+      const [tab, setTab] = React.useState('write')
+      const textarea = React.useRef(null)
+      const preview = useMarkdownPreview(api, t, previewTarget ?? null, value, tab === 'preview')
+      const previewImages = useAttachmentData(
+        api,
+        t,
+        previewTarget?.serverId,
+        tab === 'preview' ? collectAttachmentUuids(value) : [],
+      )
+      const runTool = (id) => {
+        const element = textarea.current
+        const selection = element !== null && element !== undefined && typeof element.selectionStart === 'number'
+          ? { start: element.selectionStart, end: element.selectionEnd }
+          : { start: value.length, end: value.length }
+        const applied = applyEditorTool(value, selection, id, t)
+        onChange(applied.text)
+        if (element !== null && element !== undefined && typeof element.setSelectionRange === 'function') {
+          // React 把新值写进 DOM 之后再把光标放回去；放不进去也不影响正文。
+          setTimeout(() => {
+            try {
+              element.focus()
+              element.setSelectionRange(applied.caret, applied.caret)
+            } catch {
+              // 元素已经卸载 / 不支持选区：忽略。
+            }
+          }, 0)
+        }
+      }
+      const bodyProps = { 'data-gti-editor-body': 'true' }
+      if (typeof bodyAttr === 'string' && bodyAttr !== '') bodyProps[bodyAttr] = 'true'
+      const html = preview.html === null ? null : rewritePreviewHtml(preview.html, previewImages)
+      return h('div', { className: 'dsh-gti-editor', 'data-gti-editor-surface': tab },
+        h('div', { className: 'dsh-gti-editor-tabs' },
+          h('button', {
+            type: 'button',
+            className: 'dsh-gti-editor-tab',
+            'data-active': tab === 'write' ? 'true' : 'false',
+            'data-gti-editor-tab': 'write',
+            onClick: () => setTab('write'),
+          }, t('editor.write')),
+          h('button', {
+            type: 'button',
+            className: 'dsh-gti-editor-tab',
+            'data-active': tab === 'preview' ? 'true' : 'false',
+            'data-gti-editor-tab': 'preview',
+            onClick: () => setTab('preview'),
+          }, t('editor.preview'))),
+        tab === 'preview'
+          ? h('div', { className: 'dsh-gti-editor-preview' },
+            preview.error !== null
+              ? h('p', { className: 'dsh-gti-note', 'data-gti-preview-error': 'true' }, preview.error)
+              : String(value).trim() === ''
+                ? h('p', { className: 'dsh-gti-note' }, t('editor.previewEmpty'))
+                : html === null
+                  ? h('p', { className: 'dsh-gti-note', 'data-gti-preview-loading': 'true' }, t('editor.loading'))
+                  : h('div', { className: 'dsh-gti-markdown', 'data-gti-preview-html': 'true', dangerouslySetInnerHTML: { __html: html } }))
+          : [
+            h('div', { className: 'dsh-gti-editor-toolbar' }, EDITOR_TOOLS.map((tool) => h('button', {
+              key: tool.id,
+              type: 'button',
+              className: 'dsh-gti-editor-tool',
+              title: t(tool.titleKey),
+              disabled,
+              'data-gti-editor-tool': tool.id,
+              style: tool.weight === undefined ? undefined : { fontWeight: tool.weight },
+              // 按下时别抢走 textarea 的焦点，否则光标位置丢了。
+              onMouseDown: (event) => event.preventDefault(),
+              onClick: () => runTool(tool.id),
+            }, tool.label))),
+            h('div', { className: 'dsh-gti-editor-box' },
+              h('textarea', {
+                ref: textarea,
+                className: 'dsh-gti-editor-textarea',
+                value,
+                placeholder,
+                disabled,
+                rows: rows ?? 8,
+                onChange: (event) => onChange(event.target.value),
+                ...dropProps,
+                ...bodyProps,
+              })),
+          ],
+        children)
+    }
+
+    /**
+     * 附件卡片：Gitea 编辑器底下那种「缩略图 + 文件名 + 体积 + 移除文件 / 复制链接」。
+     * @param props - `t` / `items`（`{ key, name, size, preview, onRemove, link }`）。
+     */
+    function ImageCards({ t, items }) {
+      if (items.length === 0) return null
+      return h('div', { className: 'dsh-gti-editor-attachments', 'data-gti-attachments': String(items.length) },
+        items.map((item) => h('div', { key: item.key, className: 'dsh-gti-attachment-card', 'data-gti-attachment-card': item.key },
+          item.preview === null || item.preview === undefined
+            ? h('div', { className: 'dsh-gti-attachment-thumb' }, item.name ?? '')
+            : h('img', { className: 'dsh-gti-attachment-thumb', src: item.preview, alt: item.name ?? '', loading: 'lazy' }),
+          h('div', { className: 'dsh-gti-attachment-name', title: item.name ?? '' }, item.name ?? ''),
+          item.size === null || item.size === undefined
+            ? null
+            : h('div', { className: 'dsh-gti-attachment-size' }, formatBytes(item.size)),
+          item.hint === null || item.hint === undefined
+            ? null
+            : h('div', { className: 'dsh-gti-attachment-hint' }, item.hint),
+          h('div', { className: 'dsh-gti-attachment-actions' },
+            item.onRemove === undefined ? null : h('button', {
+              type: 'button',
+              className: 'dsh-gti-link-button',
+              'data-gti-attachment-remove': item.key,
+              onClick: () => item.onRemove(),
+            }, t('editor.removeFile')),
+            item.link === null || item.link === undefined ? null : h('button', {
+              type: 'button',
+              className: 'dsh-gti-link-button',
+              'data-gti-attachment-copy': item.key,
+              onClick: () => {
+                if (typeof navigator !== 'undefined' && navigator.clipboard !== undefined && typeof navigator.clipboard.writeText === 'function') {
+                  void navigator.clipboard.writeText(item.link)
+                }
+              },
+            }, t('editor.copyLink'))))))
+    }
+
     // ── issue 表单（新建 / 编辑共用） ───────────────────────────────────────
 
     /**
@@ -1704,7 +2079,7 @@ window.__ModuleLoader__.load({
      * @param props - `mode`（`create` / `edit`）、`meta`、`initial`、`onSubmit`、`onCancel`、`t`、
      *   `busy`、`api`、`uploadTarget`（编辑时的上传目标，含 `index`；新建为 null）。
      */
-    function IssueForm({ mode, meta, initial, onSubmit, onCancel, t, busy, api, uploadTarget }) {
+    function IssueForm({ mode, meta, initial, onSubmit, onCancel, t, busy, api, uploadTarget, previewTarget, assets }) {
       const [title, setTitle] = React.useState(initial.title ?? '')
       const [body, setBody] = React.useState(initial.body ?? '')
       const [dueDate, setDueDate] = React.useState(
@@ -1721,6 +2096,53 @@ window.__ModuleLoader__.load({
         immediate: mode === 'edit' && uploadTarget !== null && uploadTarget !== undefined,
         onInsert: (markdown, element) => setBody((current) => insertMarkdown(current, markdown, element)),
       })
+
+      /** 正文里的图片字节（卡片缩略图用；与编辑器预览共用同一份缓存）。 */
+      const bodyImages = useAttachmentData(api, t, uploadTarget?.serverId, collectAttachmentUuids(body))
+
+      /** 远端附件元数据（uuid → 附件）；编辑已有 issue 时由 `issue.assets.list` 带进来。 */
+      const assetByUuid = {}
+      for (const asset of assets ?? []) {
+        if (typeof asset?.uuid === 'string') assetByUuid[asset.uuid.toLowerCase()] = asset
+      }
+
+      /**
+       * 移除一张图：先把正文里的引用删掉，再尽力删远端附件（编辑态才知道附件 id）。
+       * 远端删除失败只提示，不回滚正文 —— 用户要的是「这张图别在正文里」。
+       */
+      const removeImage = async (uuid) => {
+        setBody((current) => removeImageRefs(current, uuid))
+        const asset = assetByUuid[uuid] ?? ATTACHMENT_META.get(uuid)
+        if (mode !== 'edit' || uploadTarget === null || uploadTarget === undefined) return
+        if (asset === null || asset === undefined || typeof asset.id !== 'number') return
+        const result = await api.gitea('issue.asset.delete', { ...uploadTarget, attachmentId: asset.id })
+        if (!result.ok) images.setNotice({ tone: 'error', text: t('image.failed', { message: failureText(t, result) }) })
+      }
+
+      /** 附件卡片：待上传的本地图片 + 正文里已经上传的图片。 */
+      const cardItems = images.queued.map((item) => ({
+        key: `queued-${item.key}`,
+        name: item.file.name,
+        size: item.file.size,
+        preview: item.preview,
+        onRemove: () => images.remove(item.key),
+      }))
+      const cardSeen = new Set()
+      for (const ref of collectImageRefs(body)) {
+        if (ref.uuid === null || cardSeen.has(ref.uuid)) continue
+        cardSeen.add(ref.uuid)
+        const asset = assetByUuid[ref.uuid] ?? ATTACHMENT_META.get(ref.uuid)
+        const state = bodyImages[ref.uuid]
+        cardItems.push({
+          key: `asset-${ref.uuid}`,
+          name: asset?.name ?? ref.alt ?? ref.uuid,
+          size: asset?.size ?? null,
+          preview: state !== undefined && state.status === 'ready' ? state.dataUrl : null,
+          hint: state !== undefined && state.status === 'failed' ? state.message : null,
+          link: asset?.downloadUrl ?? `/attachments/${ref.uuid}`,
+          onRemove: () => void removeImage(ref.uuid),
+        })
+      }
 
       const toggle = (list, setList, value) => {
         setList(list.includes(value) ? list.filter((item) => item !== value) : [...list, value])
@@ -1750,44 +2172,36 @@ window.__ModuleLoader__.load({
           })),
         h('div', { className: 'dsh-gti-field' },
           h('label', { className: 'dsh-gti-field-label' }, t('form.body')),
-          h('textarea', {
-            className: 'dsh-gti-textarea',
+          h(MarkdownEditor, {
+            api,
+            t,
             value: body,
+            onChange: setBody,
             placeholder: t('form.bodyPlaceholder'),
-            'data-gti-form-body': 'true',
-            onChange: (event) => setBody(event.target.value),
-            ...images.dropProps,
-          }),
-          h('div', { className: 'dsh-gti-image-bar' },
-            h('label', { className: 'dsh-gti-button', 'data-gti-image-pick': 'true' },
-              images.busy ? t('image.uploading') : t('image.upload'),
-              h('input', {
-                type: 'file',
-                accept: 'image/*',
-                multiple: true,
-                'data-gti-image-input': 'true',
-                style: { display: 'none' },
-                onChange: (event) => {
-                  const files = Array.from(event.target.files ?? [])
-                  event.target.value = ''
-                  void images.accept(files, undefined)
-                },
-              })),
-            h('span', { className: 'dsh-gti-note' }, t('image.hint'))),
-          images.queued.length === 0 ? null : h('div', {
-            className: 'dsh-gti-image-queue',
-            'data-gti-image-queue': String(images.queued.length),
-          }, images.queued.map((item) => h('span', { key: item.key, className: 'dsh-gti-chip' },
-            item.file.name,
-            h('button', {
-              type: 'button',
-              className: 'dsh-gti-icon-button',
-              title: t('common.delete'),
-              'data-gti-image-remove': item.key,
-              onClick: () => images.remove(item.key),
-            }, '×')))),
-          images.notice === null ? null : h(Banner, { tone: images.notice.tone, text: images.notice.text }),
-          h(ImagePreviews, { api, t, serverId: uploadTarget?.serverId, text: body, queued: images.queued })),
+            previewTarget: previewTarget ?? null,
+            disabled: busy,
+            dropProps: images.dropProps,
+            bodyAttr: 'data-gti-form-body',
+            rows: 10,
+          },
+            h('div', { className: 'dsh-gti-image-bar' },
+              h('label', { className: 'dsh-gti-button', 'data-gti-image-pick': 'true' },
+                images.busy ? t('image.uploading') : t('image.upload'),
+                h('input', {
+                  type: 'file',
+                  accept: 'image/*',
+                  multiple: true,
+                  'data-gti-image-input': 'true',
+                  style: { display: 'none' },
+                  onChange: (event) => {
+                    const files = Array.from(event.target.files ?? [])
+                    event.target.value = ''
+                    void images.accept(files, undefined)
+                  },
+                })),
+              h('span', { className: 'dsh-gti-note' }, t('image.hint'))),
+            h(ImageCards, { t, items: cardItems }),
+            images.notice === null ? null : h(Banner, { tone: images.notice.tone, text: images.notice.text }))),
         meta.labels.length === 0 ? null : h('div', { className: 'dsh-gti-field' },
           h('label', { className: 'dsh-gti-field-label' }, `${t('form.labels')}（${t('meta.labels', { n: meta.labels.length })}）`),
           h('div', { className: 'dsh-gti-choices' }, meta.labels.map((label) => h('span', {
@@ -1825,7 +2239,7 @@ window.__ModuleLoader__.load({
               'data-gti-form-due': 'true',
               onChange: (event) => setDueDate(event.target.value),
             }))),
-        h('div', { className: 'dsh-gti-actions' },
+        h('div', { className: 'dsh-gti-actions', 'data-align': 'end' },
           h('button', {
             type: 'button',
             className: 'dsh-gti-button',
@@ -1883,6 +2297,36 @@ window.__ModuleLoader__.load({
         immediate: true,
         onInsert: (markdown, element) => setDraft((current) => insertMarkdown(current, markdown, element)),
       })
+
+      /** 评论草稿里的图片（卡片缩略图 + 移除用；与正文共用附件缓存）。 */
+      const commentImageStates = useAttachmentData(api, t, target.serverId, collectAttachmentUuids(draft))
+
+      /** 移除草稿里的一张图：正文引用先删，远端附件尽力删（评论图挂在 issue 上）。 */
+      const removeCommentImage = async (uuid) => {
+        setDraft((current) => removeImageRefs(current, uuid))
+        const asset = ATTACHMENT_META.get(uuid)
+        if (asset === null || asset === undefined || typeof asset.id !== 'number') return
+        const result = await api.gitea('issue.asset.delete', { ...target, attachmentId: asset.id })
+        if (!result.ok) commentImages.setNotice({ tone: 'error', text: t('image.failed', { message: failureText(t, result) }) })
+      }
+
+      const commentCards = []
+      const commentSeen = new Set()
+      for (const ref of collectImageRefs(draft)) {
+        if (ref.uuid === null || commentSeen.has(ref.uuid)) continue
+        commentSeen.add(ref.uuid)
+        const asset = ATTACHMENT_META.get(ref.uuid)
+        const state = commentImageStates[ref.uuid]
+        commentCards.push({
+          key: `comment-${ref.uuid}`,
+          name: asset?.name ?? ref.alt ?? ref.uuid,
+          size: asset?.size ?? null,
+          preview: state !== undefined && state.status === 'ready' ? state.dataUrl : null,
+          hint: state !== undefined && state.status === 'failed' ? state.message : null,
+          link: asset?.downloadUrl ?? `/attachments/${ref.uuid}`,
+          onRemove: () => void removeCommentImage(ref.uuid),
+        })
+      }
 
       /** 重新拉详情。 */
       const reload = React.useCallback(async () => {
@@ -2191,31 +2635,36 @@ window.__ModuleLoader__.load({
                   : h('div', { className: 'dsh-gti-comment-body' },
                     renderMarkdownImages(comment.body, imageStates, t, `comment-${comment.id}`) ?? comment.body)))),
             h('div', null,
-              h('textarea', {
-                className: 'dsh-gti-textarea',
+              h(MarkdownEditor, {
+                api,
+                t,
                 value: draft,
+                onChange: setDraft,
                 placeholder: t('comments.placeholder'),
-                'data-gti-comment-draft': 'true',
-                onChange: (event) => setDraft(event.target.value),
-                ...commentImages.dropProps,
-              }),
-              h('div', { className: 'dsh-gti-image-bar' },
-                h('label', { className: 'dsh-gti-button', 'data-gti-image-pick': 'true' },
-                  commentImages.busy ? t('image.uploading') : t('image.upload'),
-                  h('input', {
-                    type: 'file',
-                    accept: 'image/*',
-                    multiple: true,
-                    'data-gti-image-input': 'true',
-                    style: { display: 'none' },
-                    onChange: (event) => {
-                      const files = Array.from(event.target.files ?? [])
-                      event.target.value = ''
-                      void commentImages.accept(files, undefined)
-                    },
-                  })),
-                h('span', { className: 'dsh-gti-note' }, t('image.hint'))),
-              commentImages.notice === null ? null : h(Banner, { tone: commentImages.notice.tone, text: commentImages.notice.text }),
+                previewTarget: { serverId: target.serverId, owner: target.owner, repo: target.repo },
+                disabled: busy !== null,
+                dropProps: commentImages.dropProps,
+                bodyAttr: 'data-gti-comment-draft',
+                rows: 6,
+              },
+                h('div', { className: 'dsh-gti-image-bar' },
+                  h('label', { className: 'dsh-gti-button', 'data-gti-image-pick': 'true' },
+                    commentImages.busy ? t('image.uploading') : t('image.upload'),
+                    h('input', {
+                      type: 'file',
+                      accept: 'image/*',
+                      multiple: true,
+                      'data-gti-image-input': 'true',
+                      style: { display: 'none' },
+                      onChange: (event) => {
+                        const files = Array.from(event.target.files ?? [])
+                        event.target.value = ''
+                        void commentImages.accept(files, undefined)
+                      },
+                    })),
+                  h('span', { className: 'dsh-gti-note' }, t('image.hint'))),
+                h(ImageCards, { t, items: commentCards }),
+                commentImages.notice === null ? null : h(Banner, { tone: commentImages.notice.tone, text: commentImages.notice.text })),
               h('div', { className: 'dsh-gti-actions' },
                 h('button', {
                   type: 'button',
@@ -3038,6 +3487,25 @@ window.__ModuleLoader__.load({
        * 失败原因，只记得自己贴过图）。所以停在表单页、点名编号与原因，只留「打开已创建的 issue」。
        */
       const [created, setCreated] = React.useState(null)
+      /** 编辑已有 issue 时先读一遍附件：卡片要显示真实文件名 / 体积，移除时也按 id 删。 */
+      const [assets, setAssets] = React.useState([])
+
+      React.useEffect(() => {
+        if (mode !== 'edit' || issue === null || issue === undefined) return () => {}
+        let alive = true
+        void api.gitea('issue.assets.list', {
+          serverId: target.serverId,
+          owner: target.owner,
+          repo: target.repo,
+          index: issue.index,
+        }).then((result) => {
+          if (!alive || !result.ok) return
+          const list = Array.isArray(result.data) ? result.data : []
+          for (const asset of list) rememberAsset(asset)
+          setAssets(list)
+        })
+        return () => { alive = false }
+      }, [api, mode, target.serverId, target.owner, target.repo, issue?.index])
 
       const submit = async (values) => {
         setBusy(true)
@@ -3132,6 +3600,8 @@ window.__ModuleLoader__.load({
             t,
             api,
             uploadTarget: mode === 'edit' ? { ...target, index: issue.index } : null,
+            previewTarget: { serverId: target.serverId, owner: target.owner, repo: target.repo },
+            assets,
             initial: mode === 'create'
               ? { title: '', body: '' }
               : {
