@@ -682,6 +682,60 @@ test('锁文件过期可以被抢走', async () => {
   assert.equal(harness.watch.status().locked, true)
 })
 
+test('锁文件损坏（0 字节）：mtime 够老就抢走，不把轮询永久卡死', async () => {
+  const server = await useGitea()
+  seedIssue(server, 1, { updated_at: '2026-10-16T00:00:00.000Z' })
+  const harness = await makeHarness({
+    server,
+    root: '/data/ai/dsh/gitea_task_issues',
+    global: { intervalSeconds: 60 },
+  })
+  const { writeFile, utimes } = await import('node:fs/promises')
+  // 进程在 open 与 write 之间被杀留下的锁：内容读不出来（2026-10-25 真机就是这么卡的）。
+  await writeFile(lockFile(), '', 'utf8')
+  const old = (harness.clock.ms - 2 * 60 * 60 * 1000) / 1000
+  await utimes(lockFile(), old, old)
+
+  const summary = await harness.watch.tickNow()
+  assert.equal(harness.watch.status().locked, true, '坏锁按 mtime 过期后必须能被抢走')
+  assert.notDeepEqual(summary, { skipped: 'lock-held' })
+})
+
+test('锁文件损坏但刚写过：当成本轮正在写，让一步', async () => {
+  const server = await useGitea()
+  seedIssue(server, 1, { updated_at: '2026-10-16T00:00:00.000Z' })
+  const harness = await makeHarness({
+    server,
+    root: '/data/ai/dsh/gitea_task_issues',
+    global: { intervalSeconds: 60 },
+  })
+  const { writeFile, utimes } = await import('node:fs/promises')
+  await writeFile(lockFile(), '', 'utf8')
+  const fresh = harness.clock.ms / 1000
+  await utimes(lockFile(), fresh, fresh)
+
+  const summary = await harness.watch.tickNow()
+  assert.deepEqual(summary, { skipped: 'lock-held' })
+  assert.equal(harness.watch.status().locked, false)
+})
+
+test('锁文件没有 heartbeatAt：同样按 mtime 判龄，不会当成永远有人持有', async () => {
+  const server = await useGitea()
+  seedIssue(server, 1, { updated_at: '2026-10-16T00:00:00.000Z' })
+  const harness = await makeHarness({
+    server,
+    root: '/data/ai/dsh/gitea_task_issues',
+    global: { intervalSeconds: 60 },
+  })
+  const { writeFile, utimes } = await import('node:fs/promises')
+  await writeFile(lockFile(), JSON.stringify({ pid: 999999 }), 'utf8')
+  const old = (harness.clock.ms - 2 * 60 * 60 * 1000) / 1000
+  await utimes(lockFile(), old, old)
+
+  await harness.watch.tickNow()
+  assert.equal(harness.watch.status().locked, true)
+})
+
 // ── 重放 ────────────────────────────────────────────────────────────────────
 
 test('重放：把已投递的标记重新变成待办，不依赖增量查询', async () => {

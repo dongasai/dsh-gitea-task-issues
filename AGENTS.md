@@ -18,7 +18,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（139 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（142 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -44,7 +44,7 @@
 | [lib/triggers.js](lib/triggers.js) | **纯函数**：账本 + issues + 评论 → 触发（矩阵的主战场） |
 | [lib/watchstore.js](lib/watchstore.js) | 自动分配账本 `watch.json`：schema、收敛、剪枝 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 139 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 142 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 | [docs/auto-assign-design.md](docs/auto-assign-design.md) | 自动分配的设计稿：口径、账本、幂等闸门、边界 |
