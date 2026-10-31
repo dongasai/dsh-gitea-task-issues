@@ -1487,3 +1487,353 @@ test('编辑器：附件卡片显示文件名与体积，「移除文件」同�
   assert.ok(deleted, '移除文件应当删掉远端附件')
   assert.equal(deleted.params.params.attachmentId, 9)
 })
+
+// ── 详情页 / 表单：照 Gitea issue 页重排（issue #2）────────────────────────────
+//
+// 2026-10-31 的改版把详情页从「一列卡片」改成 Gitea issue 页的两列版式（时间线 + 属性栏），
+// 表单也改成「大标题 + 双栏」。这一节的用例只钉**结构与判据**（哪一列、什么数据出现什么标记、
+// 点下去发什么操作）：样式与像素级版式仍然只能在浏览器里手工验收。
+
+/** 详情页容器上的 `data-gti-detail` 值：`issueKey` 形状（`serverId \0 owner/repo \0 index`）。 */
+const GLOBAL_DETAIL_KEY = 'srv-a\u0000dongasai/mylike\u000012'
+
+/** 取全局看板组件（`main` 槽位）。 */
+function globalBoardOf(fake) {
+  return fake.slots.find((entry) => entry.options.name === 'main').component
+}
+
+/**
+ * 打开全局看板列表里的第一条 issue（#12）的详情，返回详情渲染后的文本。
+ *
+ * 点完行要**再渲一遍**才拿得到详情：`issue.detail` 是 `useEffect` 里的异步读取。
+ * @param mini - 迷你 React 实例。
+ * @param fake - 假 ctx（用来取 `main` 槽位的组件）。
+ * @returns 详情渲染文本。
+ */
+async function openGlobalDetail(mini, fake) {
+  const paint = () => mini.render(mini.React.createElement(globalBoardOf(fake), {}))
+  await paint()
+  findNode(mini, (node) => typeof node.props?.['data-gti-issue'] === 'string').props.onClick(FIXTURES.issues[0])
+  await paint()
+  return paint()
+}
+
+/** 点完会发请求的按钮后等它落地（两段 await：动作本身 + 动作后的重读）。 */
+async function settle() {
+  await flush()
+  await flush()
+}
+
+test('详情页：头部是 #编号 + 标题，右侧有「在浏览器打开 / 编辑」，data-gti-detail 仍是 issueKey', async () => {
+  const { fake, mini } = await newWorld()
+
+  calls.length = 0
+  const text = await openGlobalDetail(mini, fake)
+  assert.deepEqual(mini.errors, [])
+
+  // `data-gti-detail` 仍然是 issueKey：选中判定与 React key 都靠它，别改成标题。
+  assert.equal(findNode(mini, (node) => typeof node.props?.['data-gti-detail'] === 'string').props['data-gti-detail'], GLOBAL_DETAIL_KEY)
+
+  const titleNode = findNode(mini, (node) => node.props?.className === 'dsh-gti-issue-title')
+  assert.ok(titleNode, '头部缺标题节点')
+  assert.equal(titleNode.props.children[0].props.children, '#12', '标题前面应当是 `#编号`')
+  assert.equal(titleNode.props.children[1], '第一个 issue')
+
+  // 右侧动作：在浏览器打开（外链）+ 编辑（主动作）。
+  const external = findNode(mini, (node) => node.props?.['data-gti-external'] !== undefined)
+  assert.ok(external, '头部缺「在浏览器打开」')
+  assert.equal(external.type, 'a')
+  assert.equal(external.props.href, FIXTURES.detail.issue.htmlUrl)
+  assert.equal(external.props.target, '_blank')
+
+  const edit = findNode(mini, (node) => node.props?.['data-gti-edit'] === 'true')
+  assert.ok(edit, '头部缺「编辑」')
+  assert.equal(edit.type, 'button')
+  assert.equal(edit.props['data-primary'], 'true', '编辑是头部的主动作')
+
+  // 元信息一行：状态胶囊 + 「由 @who 于何时创建 · N 条评论」。
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-state'] !== undefined).props['data-gti-state'], 'open')
+  assert.match(text, /由 @tester 于 \d{2}-\d{2} \d{2}:\d{2} 创建/)
+  assert.match(text, /1 条评论/)
+  assert.ok(calls.some((call) => call.op === 'issue.detail'), '详情没有走 issue.detail')
+})
+
+test('详情页：左列时间线 + 右列属性栏，正文与评论都是评论卡片', async () => {
+  const { fake, mini } = await newWorld()
+  const text = await openGlobalDetail(mini, fake)
+  assert.deepEqual(mini.errors, [])
+
+  const layout = findNode(mini, (node) => node.props?.className === 'dsh-gti-issue-layout')
+  assert.ok(layout, '缺两列版式的容器')
+  const [timeline, side] = layout.props.children
+  // 左列没有 data-gti-* 锚点（只有 class），详见报告里的建议。
+  assert.equal(timeline.props.className, 'dsh-gti-timeline', '左列应当是时间线')
+  assert.equal(side.props['data-gti-side'], 'true', '右列应当是属性栏')
+
+  // 正文当第一张评论卡片，每条评论各一张卡片。
+  const cards = findNodes(mini, (node) => node.type === 'article' && String(node.props?.className).includes('dsh-gti-comment-card'))
+  assert.equal(cards.length, 2, '正文 + 1 条评论 => 两张评论卡片')
+  const body = findNode(mini, (node) => node.props?.['data-gti-issue-body'] !== undefined)
+  assert.ok(body, '正文卡片缺 data-gti-issue-body')
+  assert.equal(body.props['data-gti-issue-body'], GLOBAL_DETAIL_KEY)
+  assert.match(text, /正文内容/)
+  const comment = findNode(mini, (node) => node.props?.['data-gti-comment'] !== undefined)
+  assert.ok(comment, '评论缺 data-gti-comment')
+  assert.equal(comment.type, 'article')
+  // 锚点一律是字符串（与 -edit / -delete 两个兄弟锚点同型，省得探针比类型时踩空）。
+  assert.equal(comment.props['data-gti-comment'], String(FIXTURES.detail.comments[0].id), '评论卡片按评论 id 锚定')
+  assert.match(text, /第一条评论/)
+  // 评论卡头有头像 + 作者 + 时间 + 工具按钮。
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-avatar'] === 'tester'), '评论卡头缺头像锚点')
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-comment-edit'] !== undefined).props['data-gti-comment-edit'], '5')
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-comment-delete'] !== undefined).props['data-gti-comment-delete'], '5')
+
+  // 评论编辑器外壳：撰写/预览、草稿框、虚线拖放区、发表评论、关闭工单。
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-editor-comment'] === 'true'), '缺评论编辑器')
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-comment-draft'] !== undefined), '缺评论草稿框')
+  assert.ok(findNodes(mini, (node) => node.props?.['data-gti-dropzone'] !== undefined).length > 0, '评论编辑器要有拖放区')
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-comment-submit'] === 'true'), '缺发表评论按钮')
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-action'] === 'issue.edit'), '评论编辑器底部缺「关闭工单」')
+
+  // 属性栏底部的整宽动作 + 通知按钮（fixture 里未置顶、未锁定、已订阅）。
+  const actions = findNodes(mini, (node) => typeof node.props?.['data-gti-action'] === 'string')
+    .map((node) => node.props['data-gti-action'])
+  for (const name of ['issue.pin', 'issue.lock', 'issue.delete', 'issue.unsubscribe']) {
+    assert.ok(actions.includes(name), `属性栏缺动作 ${name}`)
+  }
+})
+
+test('详情页：关闭态才出现「关闭」事件行，打开态没有', async () => {
+  // ① 打开态（fixture 默认）：没有事件行。
+  const open = await newWorld()
+  await openGlobalDetail(open.mini, open.fake)
+  assert.equal(findNodes(open.mini, (node) => node.props?.['data-gti-event'] !== undefined).length, 0,
+    '打开态不该有关闭事件行')
+
+  const saved = { state: FIXTURES.detail.issue.state, closedAt: FIXTURES.detail.issue.closedAt }
+  try {
+    // ② 关闭态且有 closedAt：时间线上有一行 closed 事件。
+    FIXTURES.detail.issue.state = 'closed'
+    FIXTURES.detail.issue.closedAt = '2026-10-05T02:00:00Z'
+    const closed = await newWorld()
+    const text = await openGlobalDetail(closed.mini, closed.fake)
+    assert.deepEqual(closed.mini.errors, [])
+    const events = findNodes(closed.mini, (node) => node.props?.['data-gti-event'] !== undefined)
+    assert.equal(events.length, 1, '关闭态应当有一行关闭事件')
+    assert.equal(events[0].props['data-gti-event'], 'closed')
+    assert.match(text, /于 \d{2}-\d{2} \d{2}:\d{2} 关闭/)
+    assert.equal(findNode(closed.mini, (node) => node.props?.['data-gti-state'] !== undefined).props['data-gti-state'], 'closed')
+
+    // ③ 关闭态但 closedAt 为空：不能凭空编造「什么时候关的」，所以还是没有事件行。
+    FIXTURES.detail.issue.closedAt = null
+    const noTime = await newWorld()
+    await openGlobalDetail(noTime.mini, noTime.fake)
+    assert.equal(findNodes(noTime.mini, (node) => node.props?.['data-gti-event'] !== undefined).length, 0,
+      'closedAt 为空时不该出现关闭事件行')
+  } finally {
+    Object.assign(FIXTURES.detail.issue, saved)
+  }
+})
+
+test('详情页：标签 / 指派 / 里程碑 / 截止为空时写空态文案，不写假数据', async () => {
+  const saved = {
+    labels: FIXTURES.detail.issue.labels,
+    assignees: FIXTURES.detail.issue.assignees,
+    milestone: FIXTURES.detail.issue.milestone,
+    dueDate: FIXTURES.detail.issue.dueDate,
+  }
+  try {
+    FIXTURES.detail.issue.labels = []
+    FIXTURES.detail.issue.assignees = []
+    FIXTURES.detail.issue.milestone = null
+    FIXTURES.detail.issue.dueDate = null
+    const { fake, mini } = await newWorld()
+    const text = await openGlobalDetail(mini, fake)
+    assert.deepEqual(mini.errors, [])
+
+    for (const placeholder of ['未选择标签', '未指派', '未选择里程碑', '未设置截止日期']) {
+      assert.ok(text.includes(placeholder), `空态缺文案「${placeholder}」`)
+    }
+    assert.equal(findNode(mini, (node) => node.props?.['data-gti-side-empty'] === 'labels').props.children, '未选择标签')
+    assert.equal(findNode(mini, (node) => node.props?.['data-gti-side-empty'] === 'assignees').props.children, '未指派')
+    // 里程碑 / 截止的空态是同一套 .dsh-gti-side-value，只有 data-empty 标记。
+    const emptyValues = findNodes(mini, (node) => node.props?.className === 'dsh-gti-side-value' &&
+      node.props?.['data-empty'] === 'true').map((node) => node.props.children)
+    assert.ok(emptyValues.includes('未选择里程碑'), '里程碑空态缺 data-empty 标记')
+    assert.ok(emptyValues.includes('未设置截止日期'), '截止日空态缺 data-empty 标记')
+  } finally {
+    Object.assign(FIXTURES.detail.issue, saved)
+  }
+})
+
+test('详情页：依赖条目的「移除」发出 issue.dependencies.remove，dependsOn 是对端编号', async () => {
+  const { fake, mini } = await newWorld()
+  const paint = () => mini.render(mini.React.createElement(globalBoardOf(fake), {}))
+  await openGlobalDetail(mini, fake)
+  assert.deepEqual(mini.errors, [])
+
+  const dep = findNode(mini, (node) => node.props?.['data-gti-dependency'] !== undefined)
+  assert.ok(dep, '依赖条目缺 data-gti-dependency 锚点')
+  // 依赖编号现在是纯文本（旧版是可点的按钮 —— 点它会把当前 issue 换成依赖项，是误触）。
+  assert.equal(dep.type, 'span', '依赖编号应当是纯文本 span')
+  assert.equal(dep.props['data-gti-dependency'], '3')
+  assert.equal(dep.props.children, '#3')
+  assert.ok(!dep.props.onClick, '依赖编号不该可点')
+
+  // 「移除」按钮就在同一行里：迷你 React 没有 DOM 父指针，用行节点的 children 定位。
+  const row = findNode(mini, (node) => Array.isArray(node.props?.children) && node.props.children.includes(dep))
+  assert.ok(row, '找不到依赖条目所在的行')
+  const remove = row.props.children.find((child) => child?.type === 'button')
+  assert.ok(remove, '依赖条目缺「移除」按钮')
+
+  calls.length = 0
+  remove.props.onClick()
+  await settle()
+  await paint()
+  assert.deepEqual(mini.errors, [])
+
+  const call = calls.find((item) => item.op === 'gitea.call' && item.params?.op === 'issue.dependencies.remove')
+  assert.ok(call, `依赖移除没有发出 issue.dependencies.remove：${JSON.stringify(calls)}`)
+  assert.deepEqual(call.params.params, {
+    serverId: 'srv-a',
+    owner: 'dongasai',
+    repo: 'mylike',
+    index: 12,
+    dependsOn: 3,
+  }, 'dependsOn 必须是这条依赖的对端编号')
+  assert.ok(calls.some((item) => item.op === 'issue.detail'), '移除后应当重读详情')
+})
+
+test('详情页：评论人就是 issue 作者时带「作者」徽标，时间没变时不带「已编辑」', async () => {
+  const saved = {
+    user: FIXTURES.detail.comments[0].user,
+    updatedAt: FIXTURES.detail.comments[0].updatedAt,
+  }
+  try {
+    // 判据是 `updatedAt !== createdAt`：两者相等（或 updatedAt 为空）都不该显示「已编辑」。
+    FIXTURES.detail.comments[0].updatedAt = FIXTURES.detail.comments[0].createdAt
+    const { fake, mini } = await newWorld()
+    const text = await openGlobalDetail(mini, fake)
+    assert.deepEqual(mini.errors, [])
+
+    const role = findNode(mini, (node) => node.props?.['data-gti-role'] !== undefined)
+    assert.ok(role, '评论人等于 issue 作者时应当带「作者」徽标')
+    assert.equal(role.props['data-gti-role'], 'author')
+    assert.equal(role.props.children, '作者')
+    assert.equal(findNode(mini, (node) => node.props?.['data-gti-edited'] !== undefined), undefined,
+      'updatedAt 与 createdAt 相同不该有「已编辑」')
+    assert.doesNotMatch(text, /已编辑/)
+  } finally {
+    Object.assign(FIXTURES.detail.comments[0], saved)
+  }
+})
+
+test('详情页：评论人是别人且改过时，不显示「作者」徽标而显示「已编辑」', async () => {
+  const saved = {
+    user: FIXTURES.detail.comments[0].user,
+    updatedAt: FIXTURES.detail.comments[0].updatedAt,
+  }
+  try {
+    FIXTURES.detail.comments[0].user = { login: 'alice' }
+    FIXTURES.detail.comments[0].updatedAt = '2026-10-03T00:00:00Z'
+    const { fake, mini } = await newWorld()
+    const text = await openGlobalDetail(mini, fake)
+    assert.deepEqual(mini.errors, [])
+
+    assert.equal(findNode(mini, (node) => node.props?.['data-gti-role'] !== undefined), undefined,
+      '评论人不是 issue 作者时不该带「作者」徽标')
+    const edited = findNode(mini, (node) => node.props?.['data-gti-edited'] !== undefined)
+    assert.ok(edited, 'updatedAt 与 createdAt 不同时应当有「已编辑」')
+    assert.equal(edited.props['data-gti-edited'], 'true')
+    assert.match(text, /已编辑/)
+    assert.ok(findNode(mini, (node) => node.props?.['data-gti-avatar'] === 'alice'), '评论卡头应当显示评论人自己的头像')
+  } finally {
+    Object.assign(FIXTURES.detail.comments[0], saved)
+  }
+})
+
+test('详情页：「复制引用」在剪贴板不可用时点不炸也不报假成功；可复制时给出提示', async () => {
+  const { fake, mini } = await newWorld()
+  const paint = () => mini.render(mini.React.createElement(globalBoardOf(fake), {}))
+  await openGlobalDetail(mini, fake)
+  assert.deepEqual(mini.errors, [])
+
+  const copy = findNode(mini, (node) => node.props?.['data-gti-copy-ref'] !== undefined)
+  assert.ok(copy, '属性栏缺「复制引用」按钮')
+  // 甲：剪贴板不可用（Node 里 navigator.clipboard 是 undefined）→ 什么都不做，绝不炸。
+  copy.props.onClick()
+  await settle()
+  let text = await paint()
+  assert.deepEqual(mini.errors, [], '剪贴板不可用时点「复制引用」不该抛错')
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-ref-copied'] !== undefined), undefined,
+    '剪贴板不可用时不报假成功')
+  assert.doesNotMatch(text, /引用已复制/)
+
+  // 乙：装一个剪贴板桩 → 引用写进去，并亮出「引用已复制」。
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const written = []
+  try {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { clipboard: { writeText: (value) => { written.push(value) } } },
+    })
+    copy.props.onClick()
+    await settle()
+    text = await paint()
+    assert.deepEqual(written, ['dongasai/mylike#12'], '复制进剪贴板的应当是 owner/repo#编号')
+    assert.ok(findNode(mini, (node) => node.props?.['data-gti-ref-copied'] !== undefined), '复制成功要给可见提示')
+    assert.match(text, /引用已复制/)
+  } finally {
+    Object.defineProperty(globalThis, 'navigator', saved)
+  }
+})
+
+test('编辑表单：Gitea 版式（页头返回 + 大标题 + 双栏 + 拖放区），交互锚点仍然可用', async () => {
+  const { fake, mini } = await newWorld()
+  const paint = () => mini.render(mini.React.createElement(globalBoardOf(fake), {}))
+  await openGlobalDetail(mini, fake)
+
+  findNode(mini, (node) => node.props?.['data-gti-edit'] === 'true').props.onClick()
+  await paint()
+  await paint()
+  assert.deepEqual(mini.errors, [])
+
+  const form = findNode(mini, (node) => node.props?.['data-gti-form'] === 'edit')
+  assert.ok(form, '没有进入编辑表单')
+
+  // 页头：返回按钮 + 表单页标题（Gitea 的 new / edit 页，标题在正文之上）。
+  const back = findNode(mini, (node) => node.props?.['data-gti-editor-back'] !== undefined)
+  assert.ok(back, '表单页头缺返回按钮')
+
+  // 大标题输入：类名让它是视觉主角，锚点仍是 data-gti-form-title。
+  const title = findNode(mini, (node) => node.props?.['data-gti-form-title'] !== undefined)
+  assert.equal(title.props.value, '第一个 issue')
+  assert.match(String(title.props.className), /dsh-gti-form-title/)
+
+  // 双栏：左正文编辑器（含虚线拖放区与图片入口），右属性栏。版式容器本身只有 class。
+  const layout = form.props.children.find((child) => child?.props?.className === 'dsh-gti-form-layout')
+  assert.ok(layout, '表单缺双栏容器')
+  assert.equal(layout.props.children.length, 2)
+  assert.equal(layout.props.children[0].props.className, 'dsh-gti-form-main')
+  assert.equal(layout.props.children[1].props['data-gti-form-side'], 'true', '右栏应当是属性栏')
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-form-body'] !== undefined), '缺正文编辑器')
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-dropzone'] !== undefined), '正文编辑器缺虚线拖放区')
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-image-input'] !== undefined), '拖放区里的图片入口没了')
+
+  // 属性栏的四个锚点原样保留（编辑/新建共用这套表单）。
+  assert.equal(findNodes(mini, (node) => node.props?.['data-gti-label-choice'] !== undefined).length, 2)
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-assignee-choice'] !== undefined), '缺指派候选')
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-form-milestone'] !== undefined), '缺里程碑下拉')
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-form-due'] !== undefined), '缺截止日输入')
+  // 编辑器外壳（撰写 / 预览页签）照旧。
+  assert.deepEqual(
+    findNodes(mini, (node) => node.props?.['data-gti-editor-tab'] !== undefined).map((node) => node.props['data-gti-editor-tab']),
+    ['write', 'preview'],
+  )
+
+  // 页头返回真的回到详情，不是把状态卡在表单里。
+  back.props.onClick()
+  await paint()
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-form'] !== undefined), undefined, '点返回应当离开表单')
+  assert.ok(findNode(mini, (node) => typeof node.props?.['data-gti-detail'] === 'string'), '点返回应当回到详情')
+})

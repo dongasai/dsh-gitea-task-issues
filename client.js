@@ -145,7 +145,7 @@ window.__ModuleLoader__.load({
       'issue.labels': '标签',
       'issue.assignees': '指派',
       'issue.milestone': '里程碑',
-      'issue.due': '截止',
+      'issue.due': '截止日期',
       'issue.author': '作者',
       'issue.created': '创建于',
       'issue.updated': '更新于',
@@ -162,6 +162,28 @@ window.__ModuleLoader__.load({
       'issue.unsubscribe': '取消订阅',
       'issue.subscribed': '已订阅',
       'issue.deleted': '已删除',
+      // 详情页照 Gitea 的 issue 页排：标题区一行「由谁于何时创建」，评论各自一张卡片，
+      // 侧栏按 Gitea 的说法列属性（「未选择标签」而不是「无」——空态要说得像一回事）。
+      'issue.by': '由 {user} 于 {time} 创建',
+      'issue.openedAt': '创建于 {time}',
+      'issue.commentCount': '{n} 条评论',
+      'issue.commentedAt': '评论于 {time}',
+      'issue.edited': '已编辑',
+      // 评论头里给「issue 作者本人」挂一枚小徽标（Gitea 的 author badge）。
+      'issue.roleAuthor': '作者',
+      'issue.closedEvent': '于 {time} 关闭',
+      'issue.participants': '参与者',
+      'issue.notify': '通知',
+      'issue.reference': '引用',
+      'issue.copyRef': '复制引用',
+      'issue.refCopied': '引用已复制',
+      'issue.noLabels': '未选择标签',
+      'issue.noAssignees': '未指派',
+      'issue.noMilestone': '未选择里程碑',
+      'issue.noDue': '未设置截止日期',
+      'issue.opEmpty': '没有提供说明。',
+      'issue.deleteConfirm': '删除这条 issue？删除后不可恢复。',
+      'issue.delete': '删除 issue',
 
       // 「发送到 DSH」：拼进对话输入框的提示词 + 三种结局的横幅。
       'send.action': '发送到 DSH',
@@ -247,6 +269,8 @@ window.__ModuleLoader__.load({
       'editor.copyLink': '复制链接',
       'editor.copied': '链接已复制',
       'editor.removeFile': '移除文件',
+      // Gitea 编辑器底下那条虚线拖放区，文案照抄它的（用户扫一眼就知道能拖）。
+      'editor.dropHint': '拖曳文件或点击此处上传。',
       'editor.attachments': '附件',
       'editor.tool.h1': '一级标题',
       'editor.tool.h2': '二级标题',
@@ -471,7 +495,7 @@ window.__ModuleLoader__.load({
       'issue.labels': 'Labels',
       'issue.assignees': 'Assignees',
       'issue.milestone': 'Milestone',
-      'issue.due': 'Due',
+      'issue.due': 'Due date',
       'issue.author': 'Author',
       'issue.created': 'Created',
       'issue.updated': 'Updated',
@@ -488,6 +512,27 @@ window.__ModuleLoader__.load({
       'issue.unsubscribe': 'Unsubscribe',
       'issue.subscribed': 'Subscribed',
       'issue.deleted': 'Deleted',
+      // The detail page follows Gitea's issue page: a headline with "opened by X · time", one card
+      // per comment, and Gitea's own wording for the empty sidebar fields.
+      'issue.by': 'Opened by {user} on {time}',
+      'issue.openedAt': 'opened {time}',
+      'issue.commentCount': '{n} comments',
+      'issue.commentedAt': 'commented {time}',
+      'issue.edited': 'edited',
+      'issue.roleAuthor': 'Author',
+      'issue.closedEvent': 'closed {time}',
+      'issue.participants': 'Participants',
+      'issue.notify': 'Notifications',
+      'issue.reference': 'Reference',
+      'issue.copyRef': 'Copy reference',
+      'issue.refCopied': 'Reference copied',
+      'issue.noLabels': 'No labels selected',
+      'issue.noAssignees': 'Not assigned',
+      'issue.noMilestone': 'No milestone set',
+      'issue.noDue': 'No due date set',
+      'issue.opEmpty': 'No description provided.',
+      'issue.deleteConfirm': 'Delete this issue? This cannot be undone.',
+      'issue.delete': 'Delete issue',
 
       // Send to DSH: the prompt inserted into the composer, plus the three outcomes.
       'send.action': 'Send to DSH',
@@ -571,6 +616,7 @@ window.__ModuleLoader__.load({
       'editor.copyLink': 'Copy link',
       'editor.copied': 'Link copied',
       'editor.removeFile': 'Remove file',
+      'editor.dropHint': 'Drop files or click here to upload.',
       'editor.attachments': 'Attachments',
       'editor.tool.h1': 'Heading 1',
       'editor.tool.h2': 'Heading 2',
@@ -756,7 +802,7 @@ window.__ModuleLoader__.load({
 .dsh-gti-list{flex:1 1 auto;min-height:0;overflow:auto;padding:6px 6px 16px;scrollbar-gutter:stable}
 .dsh-gti-row{display:block;width:100%;box-sizing:border-box;padding:8px 10px;margin:2px 0;border:none;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .dsh-gti-row:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2))}
-.dsh-gti-row[data-selected="true"]{background:var(--dsw-alias-interactive-bg-selected,var(--dsw-alias-bg-layer-2))}
+.dsh-gti-row[data-selected="true"]{background:var(--dsw-alias-interactive-bg-selected,var(--dsw-alias-interactive-bg-hover))}
 .dsh-gti-row-head{display:flex;align-items:baseline;gap:6px;min-width:0}
 .dsh-gti-row-index{flex:none;font-family:var(--dsw-font-mono,ui-monospace,monospace);font-size:12px;color:var(--dsw-alias-label-tertiary)}
 .dsh-gti-row-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -781,19 +827,63 @@ window.__ModuleLoader__.load({
 .dsh-gti-chip-button[data-gti-auto-badge="mismatch"],
 .dsh-gti-chip-button[data-gti-auto-badge="unavailable"]{border-color:var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}
 .dsh-gti-label-dot{flex:none;width:8px;height:8px;border-radius:2px}
+/* ── issue 详情：照 Gitea / GitHub 的 issue 页排 ─────────────────────────────
+   头部一行「#编号 + 标题 + 动作」，下面一条元信息行，再往下是「左侧时间线 / 右侧属性栏」两列。
+   窄面板（侧栏够窄时）右栏会整体掉到时间线下面 —— 用 flex-wrap 而不是媒体查询，跟着容器走。 */
 .dsh-gti-detail{flex:1 1 auto;min-height:0;overflow:auto;padding:12px 16px 40px}
-.dsh-gti-detail-head{display:flex;align-items:flex-start;gap:8px}
-.dsh-gti-detail-title{flex:1 1 auto;min-width:0;margin:0;font-size:15px;font-weight:600;overflow-wrap:anywhere}
-.dsh-gti-kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:10px 0;font-size:12px}
-.dsh-gti-kv-key{color:var(--dsw-alias-label-tertiary);white-space:nowrap}
-.dsh-gti-kv-value{min-width:0;overflow-wrap:anywhere}
-.dsh-gti-body-text{margin:10px 0;padding:10px 12px;border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2);white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;max-height:420px;overflow:auto}
+.dsh-gti-issue{display:flex;flex-direction:column;gap:12px;max-width:1112px;margin:0 auto}
+.dsh-gti-issue-head{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;padding-bottom:10px;border-bottom:.5px solid var(--dsw-alias-border-l1)}
+.dsh-gti-issue-title{flex:1 1 320px;min-width:0;margin:0;font-size:17px;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+.dsh-gti-issue-number{color:var(--dsw-alias-label-tertiary);font-weight:400;margin-right:4px}
+.dsh-gti-issue-head-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
+.dsh-gti-issue-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--dsw-alias-label-tertiary);margin-top:-4px}
+.dsh-gti-issue-layout{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.dsh-gti-timeline{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.dsh-gti-issue-side{flex:0 0 216px;min-width:0;display:flex;flex-direction:column;gap:2px}
+/* 评论卡片：头像 + 灰色的头（谁、什么时候、能不能删），正文在下面，和 Gitea 的 comment 一样。 */
+.dsh-gti-comment-card{border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-base);overflow:hidden}
+.dsh-gti-comment-card-head{display:flex;align-items:center;gap:6px;min-height:28px;padding:4px 10px;background:var(--dsw-alias-interactive-bg-hover);border-bottom:.5px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dsh-gti-comment-card-author{font-weight:600;color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.dsh-gti-comment-card-tools{display:flex;align-items:center;gap:2px;margin-left:auto}
+.dsh-gti-comment-card-body{padding:8px 12px 10px;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.dsh-gti-comment-card-body[data-empty="true"]{color:var(--dsw-alias-label-tertiary)}
+.dsh-gti-avatar{flex:none;width:22px;height:22px;border-radius:50%;object-fit:cover;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2));border:.5px solid var(--dsw-alias-border-l2);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--dsw-alias-label-secondary);overflow:hidden;text-transform:uppercase;line-height:1}
+.dsh-gti-avatar[data-size="large"]{width:28px;height:28px;font-size:12px}
+/* 时间线上的系统事件（关闭 / 重新打开）：Gitea 用一个圆图标 + 一行灰字。 */
+.dsh-gti-event{display:flex;align-items:center;gap:6px;padding:0 2px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dsh-gti-event-icon{flex:none;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
+.dsh-gti-event[data-tone="open"] .dsh-gti-event-icon{color:var(--dsw-alias-state-success-primary)}
+.dsh-gti-event[data-tone="closed"] .dsh-gti-event-icon{color:var(--dsw-alias-state-error-primary)}
+.dsh-gti-comment-editor{display:flex;flex-direction:column;gap:8px}
+.dsh-gti-comment-footer{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dsh-gti-comment-footer .dsh-gti-spacer{flex:1 1 auto}
+/* 属性栏：Gitea 右栏那种「小标题 + 值」的分组，组间用细线分开，空态用灰色说明。 */
+.dsh-gti-side-group{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-bottom:.5px solid var(--dsw-alias-border-l1);font-size:12px}
+.dsh-gti-side-head{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--dsw-alias-label-tertiary)}
+.dsh-gti-side-head .dsh-gti-spacer{flex:1 1 auto}
+.dsh-gti-side-value{color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}
+.dsh-gti-side-value[data-empty="true"]{color:var(--dsw-alias-label-tertiary)}
+.dsh-gti-side-list{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dsh-gti-side-row{display:flex;align-items:center;gap:4px;min-width:0;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.dsh-gti-side-row-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-gti-side-add{display:flex;align-items:center;gap:4px;margin-top:2px}
+.dsh-gti-side-add .dsh-gti-input{flex:1 1 auto;min-width:0;font-size:11px;padding:2px 6px}
+.dsh-gti-side-button{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;box-sizing:border-box;font:inherit;font-size:12px;line-height:18px;padding:4px 10px;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;white-space:nowrap}
+.dsh-gti-side-button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2))}
+.dsh-gti-side-button:disabled{opacity:.4;cursor:not-allowed}
+.dsh-gti-side-button[data-danger="true"]{border-color:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-state-error-primary)}
+.dsh-gti-side-actions{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+/* 编辑器的拖放区：Gitea 编辑器下面那条虚线框，点它等于点隐藏的 file input。 */
+.dsh-gti-dropzone{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border:.5px dashed var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-tertiary);font-size:11px;cursor:pointer;text-align:center}
+.dsh-gti-dropzone:hover{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-secondary)}
 .dsh-gti-section{margin-top:16px;border-top:.5px solid var(--dsw-alias-border-l1);padding-top:10px}
 .dsh-gti-section-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary)}
-.dsh-gti-comment{padding:8px 0;border-bottom:.5px dashed var(--dsw-alias-border-l1)}
-.dsh-gti-comment-head{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
-.dsh-gti-comment-body{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
-.dsh-gti-form{display:flex;flex-direction:column;gap:10px;padding:12px 16px 24px}
+/* 新建 / 编辑表单：大标题输入 + 双栏（左正文、右属性），和 Gitea 的 new issue 页一致。 */
+.dsh-gti-form{display:flex;flex-direction:column;gap:12px;padding:12px 16px 24px}
+.dsh-gti-form-layout{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.dsh-gti-form-main{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.dsh-gti-form-side{flex:0 0 216px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.dsh-gti-form-title{font-size:15px;font-weight:600;padding:6px 10px}
 .dsh-gti-field{display:flex;flex-direction:column;gap:4px}
 .dsh-gti-field-label{font-size:11px;color:var(--dsw-alias-label-tertiary)}
 .dsh-gti-field-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -802,13 +892,10 @@ window.__ModuleLoader__.load({
 .dsh-gti-choice[data-on="true"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
 .dsh-gti-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
 .dsh-gti-actions[data-align="end"]{justify-content:flex-end}
-/* 正文贴图：按钮与隐藏 file input 同一行；新建时攒着的图片用 chip 排开，逐张可移除。 */
-.dsh-gti-image-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px}
-.dsh-gti-image-queue{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.dsh-gti-image-queue .dsh-gti-icon-button{width:18px;height:18px;font-size:12px;line-height:1}
+/* 正文贴图现在只有一条虚线拖放区（Gitea 那种），按钮与 file input 都在里面。 */
 /* markdown 编辑器（照 Gitea / GitHub 的样子）：页签 + 工具栏 + 输入框 + 附件卡片。 */
 .dsh-gti-editor{display:flex;flex-direction:column;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,6px);overflow:hidden;background:var(--dsw-alias-bg-base)}
-.dsh-gti-editor-tabs{display:flex;align-items:flex-end;gap:2px;padding:4px 6px 0;background:var(--dsw-alias-bg-layer-2);border-bottom:.5px solid var(--dsw-alias-border-l1)}
+.dsh-gti-editor-tabs{display:flex;align-items:flex-end;gap:2px;padding:4px 6px 0;background:var(--dsw-alias-interactive-bg-hover);border-bottom:.5px solid var(--dsw-alias-border-l1)}
 .dsh-gti-editor-tab{font:inherit;font-size:12px;padding:4px 10px;border:.5px solid transparent;border-bottom:none;border-radius:var(--dsw-radius-sm,6px) var(--dsw-radius-sm,6px) 0 0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
 .dsh-gti-editor-tab[data-active="true"]{background:var(--dsw-alias-bg-base);border-color:var(--dsw-alias-border-l1);color:var(--dsw-alias-label-primary)}
 .dsh-gti-editor-toolbar{display:flex;align-items:center;gap:2px;flex-wrap:wrap;padding:4px 6px;border-bottom:.5px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary)}
@@ -857,6 +944,8 @@ window.__ModuleLoader__.load({
 .dsh-gti-table th{color:var(--dsw-alias-label-tertiary);font-weight:500}
 .dsh-gti-server-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;align-items:end;margin:10px 0}
 .dsh-gti-scroll{flex:1 1 auto;min-height:0;overflow:auto;padding:12px 16px 40px}
+/* 新建 / 编辑页与详情页同一个内容宽度，超宽面板上不要一行铺满 1900px。 */
+.dsh-gti-scroll[data-gti-editor]{max-width:1112px;margin:0 auto;width:100%;box-sizing:border-box}
 .dsh-gti-code{font-family:var(--dsw-font-mono,ui-monospace,monospace);font-size:11px;color:var(--dsw-alias-label-tertiary);overflow-wrap:anywhere}
 .dsh-gti-split{display:flex;flex:1 1 auto;min-height:0}
 .dsh-gti-split-list{width:min(420px,42%);flex:none;border-right:.5px solid var(--dsw-alias-border-l1);display:flex;flex-direction:column;min-height:0}
@@ -902,6 +991,9 @@ window.__ModuleLoader__.load({
       pin: ['M8 2.5 9 6l3.5.5-2.5 2.5.7 4.5-2.7-2-2.7 2 .7-4.5L3.5 6.5 7 6z'],
       // 「发送到 DSH」：一条指向右侧的箭头（16px 网格里最不容易看错的「发出去」形状）。
       send: ['M2.5 8h9', 'M8.3 4.8 11.5 8l-3.2 3.2'],
+      // 评论卡片右上角那两个（编辑 / 复制引用）：Gitea 用铅笔和双矩形，线宽保持一致。
+      edit: ['M10.8 2.9 13.1 5.2 5.6 12.7 2.9 13.1 3.3 10.4z', 'M9.6 4.1 11.9 6.4'],
+      copy: ['M5.8 5.8h7.7v7.7H5.8z', 'M2.5 10.2V2.5h7.7'],
     }
 
     /**
@@ -1030,6 +1122,41 @@ window.__ModuleLoader__.load({
       if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`
       if (hours > 0) return `${hours}h`
       return `${minutes}m`
+    }
+
+    /**
+     * 往剪贴板写一段文本，回「到底成没成」。
+     *
+     * 两条路：`navigator.clipboard` 只在**安全上下文**（https / localhost）里存在 —— 这个插件
+     * 常被从局域网的 http 地址打开，那时它直接是 undefined（实测 `39.98.48.33:31795` 就是这种），
+     * 于是退到老办法 `execCommand('copy')`：临时塞一个只读 textarea、选中、复制、收掉。
+     * 两条都不成就回 false —— 调用方**别报成功**，静默失败比假提示好。
+     * @param text - 要复制的文本。
+     * @returns 是否复制成功（Promise，永远 resolve）。
+     */
+    function copyText(text) {
+      const value = String(text ?? '')
+      const nav = typeof navigator === 'undefined' ? undefined : navigator
+      if (nav?.clipboard !== undefined && typeof nav.clipboard.writeText === 'function') {
+        // 包一层 Promise.resolve：老 polyfill / 测试桩可能不返回 promise。
+        return Promise.resolve(nav.clipboard.writeText(value)).then(() => true).catch(() => false)
+      }
+      try {
+        if (typeof document === 'undefined' || typeof document.execCommand !== 'function') return Promise.resolve(false)
+        const area = document.createElement('textarea')
+        area.value = value
+        area.setAttribute('readonly', 'readonly')
+        area.style.position = 'fixed'
+        area.style.top = '-1000px'
+        area.style.opacity = '0'
+        document.body.appendChild(area)
+        area.select()
+        const ok = document.execCommand('copy')
+        document.body.removeChild(area)
+        return Promise.resolve(ok === true)
+      } catch {
+        return Promise.resolve(false)
+      }
     }
 
     /** 人类可读的字节数。 */
@@ -1450,6 +1577,48 @@ window.__ModuleLoader__.load({
       return (labels ?? []).map((label) => h('span', { key: `${label.id ?? label.name}`, className: 'dsh-gti-chip' },
         h('span', { className: 'dsh-gti-label-dot', style: labelDotStyle(label.color) }),
         label.name))
+    }
+
+    /**
+     * 用户头像。Gitea 的 `/avatars/...` 是匿名可取的公开路由，所以有 `avatarUrl` 就直连；
+     * 取不到（私有部署关了头像、跨网段打不开）就退成首字母圆片 —— 不留破图，也不阻塞渲染。
+     * @param props - `user`（`{ login, avatarUrl }`，可能为 null）/ `size`（`normal` / `large`）。
+     */
+    function Avatar({ user, size }) {
+      const login = typeof user?.login === 'string' && user.login !== '' ? user.login : '?'
+      const [broken, setBroken] = React.useState(false)
+      const source = typeof user?.avatarUrl === 'string' && user.avatarUrl !== '' ? user.avatarUrl : null
+      const attrs = {
+        className: 'dsh-gti-avatar',
+        'data-gti-avatar': login,
+        'data-size': size === 'large' ? 'large' : undefined,
+        'aria-hidden': 'true',
+      }
+      if (source === null || broken) return h('span', attrs, login.slice(0, 1))
+      return h('img', { ...attrs, src: source, alt: '', loading: 'lazy', onError: () => setBroken(true) })
+    }
+
+    /**
+     * 时间线上的一条系统事件（关闭 / 重新打开）：圆图标 + 一句灰字，和 Gitea 的 event 一样。
+     * @param props - `tone`（`open` / `closed`）/ `icon`（{@link ICON_PATHS} 的键）/ `text`。
+     */
+    function EventRow({ tone, icon, text }) {
+      return h('div', { className: 'dsh-gti-event', 'data-tone': tone, 'data-gti-event': tone },
+        h('span', { className: 'dsh-gti-event-icon' }, h(Icon, { name: icon, size: 11 })),
+        h('span', null, text))
+    }
+
+    /**
+     * 详情页右侧属性栏的一组：小标题（右侧可挂一段说明）+ 值/列表。
+     * @param props - `title` / `toolbar`（标题行右端）/ `children`。
+     */
+    function SideGroup({ title, toolbar, children }) {
+      return h('div', { className: 'dsh-gti-side-group' },
+        h('div', { className: 'dsh-gti-side-head' },
+          h('span', null, title),
+          h('span', { className: 'dsh-gti-spacer' }),
+          toolbar === undefined ? null : toolbar),
+        children)
     }
 
     /** 一屏提示用的加载/错误块。 */
@@ -2060,11 +2229,7 @@ window.__ModuleLoader__.load({
               type: 'button',
               className: 'dsh-gti-link-button',
               'data-gti-attachment-copy': item.key,
-              onClick: () => {
-                if (typeof navigator !== 'undefined' && navigator.clipboard !== undefined && typeof navigator.clipboard.writeText === 'function') {
-                  void navigator.clipboard.writeText(item.link)
-                }
-              },
+              onClick: () => { void copyText(item.link) },
             }, t('editor.copyLink'))))))
     }
 
@@ -2161,32 +2326,38 @@ window.__ModuleLoader__.load({
       }
 
       return h('div', { className: 'dsh-gti-form', 'data-gti-form': mode },
+        // 标题是这一页的主角：像 Gitea 的 new issue 页那样，一行大输入，下面才是正文与属性。
         h('div', { className: 'dsh-gti-field' },
           h('label', { className: 'dsh-gti-field-label' }, t('form.title')),
           h('input', {
-            className: 'dsh-gti-input',
+            className: 'dsh-gti-input dsh-gti-form-title',
             value: title,
             placeholder: t('form.titlePlaceholder'),
             'data-gti-form-title': 'true',
             onChange: (event) => setTitle(event.target.value),
           })),
-        h('div', { className: 'dsh-gti-field' },
-          h('label', { className: 'dsh-gti-field-label' }, t('form.body')),
-          h(MarkdownEditor, {
-            api,
-            t,
-            value: body,
-            onChange: setBody,
-            placeholder: t('form.bodyPlaceholder'),
-            previewTarget: previewTarget ?? null,
-            disabled: busy,
-            dropProps: images.dropProps,
-            bodyAttr: 'data-gti-form-body',
-            rows: 10,
-          },
-            h('div', { className: 'dsh-gti-image-bar' },
-              h('label', { className: 'dsh-gti-button', 'data-gti-image-pick': 'true' },
-                images.busy ? t('image.uploading') : t('image.upload'),
+        h('div', { className: 'dsh-gti-form-layout', 'data-gti-form-layout': 'true' },
+          h('div', { className: 'dsh-gti-form-main', 'data-gti-form-main': 'true' },
+            h(MarkdownEditor, {
+              api,
+              t,
+              value: body,
+              onChange: setBody,
+              placeholder: t('form.bodyPlaceholder'),
+              previewTarget: previewTarget ?? null,
+              disabled: busy,
+              dropProps: images.dropProps,
+              bodyAttr: 'data-gti-form-body',
+              rows: 10,
+            },
+              h('label', {
+                className: 'dsh-gti-dropzone',
+                'data-gti-dropzone': 'true',
+                'data-gti-image-pick': 'true',
+                title: t('image.hint'),
+                ...images.dropProps,
+              },
+                images.busy ? t('image.uploading') : t('editor.dropHint'),
                 h('input', {
                   type: 'file',
                   accept: 'image/*',
@@ -2199,46 +2370,52 @@ window.__ModuleLoader__.load({
                     void images.accept(files, undefined)
                   },
                 })),
-              h('span', { className: 'dsh-gti-note' }, t('image.hint'))),
-            h(ImageCards, { t, items: cardItems }),
-            images.notice === null ? null : h(Banner, { tone: images.notice.tone, text: images.notice.text }))),
-        meta.labels.length === 0 ? null : h('div', { className: 'dsh-gti-field' },
-          h('label', { className: 'dsh-gti-field-label' }, `${t('form.labels')}（${t('meta.labels', { n: meta.labels.length })}）`),
-          h('div', { className: 'dsh-gti-choices' }, meta.labels.map((label) => h('span', {
-            key: label.id,
-            className: 'dsh-gti-choice',
-            'data-on': labelIds.includes(label.id) ? 'true' : 'false',
-            'data-gti-label-choice': label.id,
-            onClick: () => toggle(labelIds, setLabelIds, label.id),
-          }, h('span', { className: 'dsh-gti-label-dot', style: labelDotStyle(label.color) }), label.name)))),
-        meta.assignees.length === 0 ? null : h('div', { className: 'dsh-gti-field' },
-          h('label', { className: 'dsh-gti-field-label' }, t('form.assignees')),
-          h('div', { className: 'dsh-gti-choices' }, meta.assignees.map((user) => h('span', {
-            key: user.login,
-            className: 'dsh-gti-choice',
-            'data-on': assignees.includes(user.login) ? 'true' : 'false',
-            'data-gti-assignee-choice': user.login,
-            onClick: () => toggle(assignees, setAssignees, user.login),
-          }, `@${user.login}`)))),
-        h('div', { className: 'dsh-gti-field-row' },
-          h('div', { className: 'dsh-gti-field' },
-            h('label', { className: 'dsh-gti-field-label' }, t('form.milestone')),
-            h('select', {
-              className: 'dsh-gti-select',
-              value: milestoneId,
-              'data-gti-form-milestone': 'true',
-              onChange: (event) => setMilestoneId(event.target.value),
-            }, [h('option', { key: '', value: '' }, t('common.none'))]
-              .concat(meta.milestones.map((milestone) => h('option', { key: milestone.id, value: String(milestone.id) }, milestone.title))))),
-          h('div', { className: 'dsh-gti-field' },
-            h('label', { className: 'dsh-gti-field-label' }, t('form.due')),
-            h('input', {
-              className: 'dsh-gti-input',
-              type: 'date',
-              value: dueDate,
-              'data-gti-form-due': 'true',
-              onChange: (event) => setDueDate(event.target.value),
-            }))),
+              h(ImageCards, { t, items: cardItems }),
+              images.notice === null ? null : h(Banner, { tone: images.notice.tone, text: images.notice.text }))),
+          // 属性栏与详情页右栏同一种摆法：一列「标签 / 指派 / 里程碑 / 截止日」。
+          h('aside', { className: 'dsh-gti-form-side', 'data-gti-form-side': 'true' },
+            meta.labels.length === 0 ? null : h('div', { className: 'dsh-gti-side-group' },
+              h('div', { className: 'dsh-gti-side-head' },
+                h('span', null, t('form.labels')),
+                h('span', { className: 'dsh-gti-spacer' }),
+                h('span', { className: 'dsh-gti-note' }, t('meta.labels', { n: meta.labels.length }))),
+              h('div', { className: 'dsh-gti-choices' }, meta.labels.map((label) => h('span', {
+                key: label.id,
+                className: 'dsh-gti-choice',
+                'data-on': labelIds.includes(label.id) ? 'true' : 'false',
+                'data-gti-label-choice': label.id,
+                onClick: () => toggle(labelIds, setLabelIds, label.id),
+              }, h('span', { className: 'dsh-gti-label-dot', style: labelDotStyle(label.color) }), label.name)))),
+            meta.assignees.length === 0 ? null : h('div', { className: 'dsh-gti-side-group' },
+              h('div', { className: 'dsh-gti-side-head' },
+                h('span', null, t('form.assignees')),
+                h('span', { className: 'dsh-gti-spacer' }),
+                h('span', { className: 'dsh-gti-note' }, t('meta.assignees', { n: meta.assignees.length }))),
+              h('div', { className: 'dsh-gti-choices' }, meta.assignees.map((user) => h('span', {
+                key: user.login,
+                className: 'dsh-gti-choice',
+                'data-on': assignees.includes(user.login) ? 'true' : 'false',
+                'data-gti-assignee-choice': user.login,
+                onClick: () => toggle(assignees, setAssignees, user.login),
+              }, `@${user.login}`)))),
+            h('div', { className: 'dsh-gti-side-group' },
+              h('div', { className: 'dsh-gti-side-head' }, h('span', null, t('form.milestone'))),
+              h('select', {
+                className: 'dsh-gti-select',
+                value: milestoneId,
+                'data-gti-form-milestone': 'true',
+                onChange: (event) => setMilestoneId(event.target.value),
+              }, [h('option', { key: '', value: '' }, t('common.none'))]
+                .concat(meta.milestones.map((milestone) => h('option', { key: milestone.id, value: String(milestone.id) }, milestone.title))))),
+            h('div', { className: 'dsh-gti-side-group' },
+              h('div', { className: 'dsh-gti-side-head' }, h('span', null, t('form.due'))),
+              h('input', {
+                className: 'dsh-gti-input',
+                type: 'date',
+                value: dueDate,
+                'data-gti-form-due': 'true',
+                onChange: (event) => setDueDate(event.target.value),
+              })))),
         h('div', { className: 'dsh-gti-actions', 'data-align': 'end' },
           h('button', {
             type: 'button',
@@ -2259,13 +2436,24 @@ window.__ModuleLoader__.load({
     // ── issue 详情 ──────────────────────────────────────────────────────────
 
     /**
-     * issue 详情：正文、元信息、依赖/阻塞、订阅/置顶/锁定/工时/附件、评论增删改。
+     * issue 详情。版式照 Gitea 的 issue 页（issue #2 给的参考截图）：
+     *
+     * - 头部：`#编号` + 标题，右侧是**发送到 DSH / 在浏览器打开 / 编辑**；
+     * - 元信息一行：状态胶囊 + 「由 @who 于何时创建 · N 条评论」（+ 置顶 / 锁定）；
+     * - 左列（时间线）：正文当成第一张评论卡片、关闭事件、每条评论一张卡片（头像 + 谁 + 何时
+     *   + 已编辑/作者徽标 + 编辑/删除），最后是评论编辑器（撰写/预览 + 工具栏 + 虚线拖放区 +
+     *   关闭工单 / 发表评论）；
+     * - 右列（属性栏）：标签 / 指派 / 里程碑 / 截止 / 参与者 / 依赖 / 阻塞 / 工时 / 附件 /
+     *   引用 / 通知，底部整宽按钮是**置顶 / 锁定 / 删除**。
+     *
+     * 两列用 `flex-wrap` 而不是媒体查询：面板窄（全局看板的详情只有半屏）时右栏整体掉到
+     * 时间线下面，功能一个不少，只是不再并排。
+     *
      * @param props - `api` / `t` / `target`（`{serverId, owner, repo, index}`）/ `onBack` / `onChanged` /
      *   `onEdit`，外加可选的 `onSend`（给了才出「发送到 DSH」按钮）与 `sendNotice`（那次发送的结果横幅）。
      */
     function IssueDetail({ api, t, target, onBack, onChanged, onEdit, onSend, sendNotice }) {
       const [detail, setDetail] = React.useState(null)
-      const [meta, setMeta] = React.useState(null)
       const [error, setError] = React.useState(null)
       const [busy, setBusy] = React.useState(null)
       const [notice, setNotice] = React.useState(null)
@@ -2274,6 +2462,8 @@ window.__ModuleLoader__.load({
       const [depInput, setDepInput] = React.useState('')
       const [blockInput, setBlockInput] = React.useState('')
       const [minutes, setMinutes] = React.useState('30')
+      /** 侧栏「引用」复制后的那一句提示（剪贴板不可用时不置位）。 */
+      const [refCopied, setRefCopied] = React.useState(false)
 
       /** 正文与所有评论里引用到的附件图（去重；重渲染时 key 稳定，不会重复取）。 */
       const imageUuids = detail === null
@@ -2341,15 +2531,6 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => { void reload() }, [reload])
 
-      // 仓库元信息只在编辑时要（标签/里程碑/可指派候选），所以单独懒加载，失败不影响正文。
-      React.useEffect(() => {
-        let alive = true
-        void api.repoMeta({ ...target, sessionId: target.sessionId }).then((result) => {
-          if (alive && result.ok) setMeta(result.data)
-        })
-        return () => { alive = false }
-      }, [api, target.serverId, target.owner, target.repo, target.sessionId])
-
       /** 跑一个动作：忙碌标记 → 调用 → 刷新 → 通知。 */
       const act = async (label, run, options = {}) => {
         setBusy(label)
@@ -2376,14 +2557,69 @@ window.__ModuleLoader__.load({
       if (detail === null) return h('div', { className: 'dsh-gti-column' }, h(Loading, { t }))
 
       const issue = detail.issue
-      const action = (label, name, params, options) => h('button', {
-        key: name,
+      const reference = `${issue.owner ?? target.owner}/${issue.repo ?? target.repo}#${issue.index}`
+
+      /** 侧栏「引用」那一行的复制：剪贴板够不着时干脆什么都不做（不弹假的成功提示）。 */
+      const copyReference = () => {
+        // 等真的复制成功再亮提示：页面没聚焦 / 没权限 / 不安全上下文时都会失败，那时说「已复制」就是骗人。
+        void copyText(reference).then((done) => { if (done) setRefCopied(true) })
+      }
+
+      /** 删除整条 issue：不可撤销，二次确认；删完直接回列表（详情已经不存在了）。 */
+      const removeIssue = async () => {
+        if (!window.confirm(t('issue.deleteConfirm'))) return
+        setBusy('issue.delete')
+        setNotice(null)
+        const result = await api.gitea('issue.delete', { ...target })
+        setBusy(null)
+        if (!result.ok) {
+          setNotice({ tone: 'error', text: failureText(t, result) })
+          return
+        }
+        onChanged?.()
+        onBack()
+      }
+
+      /**
+       * 属性栏底部的整宽动作按钮（Gitea 右栏「置顶 / 锁定对话 / 删除」那几条）。
+       * `data-gti-action` 里仍写操作名：探针按操作名点按钮，别换成文案。
+       * @param label - 按钮文案。
+       * @param actionName - 操作名（`issue.pin` 等）。
+       * @param run - 点击后的异步动作。
+       * @param extra - `{ icon, danger }`。
+       */
+      const sideAction = (label, actionName, run, extra = {}) => h('button', {
+        key: actionName,
         type: 'button',
-        className: 'dsh-gti-button',
+        className: 'dsh-gti-side-button',
         disabled: busy !== null,
-        'data-gti-action': name,
-        onClick: () => void act(name, () => api.gitea(name, { ...target, ...params }), options),
-      }, label)
+        'data-gti-action': actionName,
+        'data-danger': extra.danger === true ? 'true' : undefined,
+        onClick: () => void run(),
+      },
+        extra.icon === undefined ? null : h(Icon, { name: extra.icon }),
+        h('span', null, label))
+
+      /** 侧栏里加一条「依赖 / 阻塞」的输入行（编号 + 加号）。 */
+      const sideAdd = (value, setValue, placeholder, attr, onAdd) => h('div', { className: 'dsh-gti-side-add' },
+        h('input', {
+          className: 'dsh-gti-input',
+          value,
+          placeholder,
+          [attr]: 'true',
+          onChange: (event) => setValue(event.target.value.replace(/[^0-9]/g, '')),
+        }),
+        h('button', {
+          type: 'button',
+          className: 'dsh-gti-icon-button',
+          disabled: busy !== null || value === '',
+          title: placeholder,
+          onClick: () => void onAdd(),
+        }, h(Icon, { name: 'plus' })))
+
+      const pinOp = issue.pinned ? 'issue.unpin' : 'issue.pin'
+      const lockOp = issue.locked ? 'issue.unlock' : 'issue.lock'
+      const subscribeOp = detail.subscribed ? 'issue.unsubscribe' : 'issue.subscribe'
 
       return h('div', { className: 'dsh-gti-column', 'data-gti-detail': issueKey(issue) },
         h('div', { className: 'dsh-gti-bar' },
@@ -2394,18 +2630,8 @@ window.__ModuleLoader__.load({
             'data-gti-back': 'true',
             onClick: onBack,
           }, h(Icon, { name: 'back' })),
-          h('span', { className: 'dsh-gti-row-index' }, `#${issue.index}`),
-          h(StateChip, { state: issue.state, t }),
-          issue.pinned ? h('span', { className: 'dsh-gti-chip', 'data-tone': 'brand' }, `📌 ${t('issue.pin')}`) : null,
-          issue.locked ? h('span', { className: 'dsh-gti-chip' }, `🔒 ${t('issue.lock')}`) : null,
+          h('span', { className: 'dsh-gti-row-index' }, `${issue.owner ?? ''}/${issue.repo ?? ''}`),
           h('span', { className: 'dsh-gti-spacer' }),
-          h('button', {
-            type: 'button',
-            className: 'dsh-gti-button',
-            disabled: busy !== null,
-            'data-gti-edit': 'true',
-            onClick: () => onEdit(issue),
-          }, t('common.edit')),
           h('button', {
             type: 'button',
             className: 'dsh-gti-icon-button',
@@ -2416,266 +2642,427 @@ window.__ModuleLoader__.load({
         notice === null ? null : h(Banner, { tone: notice.tone, text: notice.text }),
         sendNotice === undefined || sendNotice === null ? null : h(Banner, { tone: sendNotice.tone, text: sendNotice.text }),
         h('div', { className: 'dsh-gti-detail' },
-          h('div', { className: 'dsh-gti-detail-head' },
-            h('h2', { className: 'dsh-gti-detail-title' }, issue.title),
-            issue.htmlUrl === null ? null : h('a', {
-              className: 'dsh-gti-button',
-              href: issue.htmlUrl,
-              target: '_blank',
-              rel: 'noreferrer',
-              'data-gti-external': 'true',
-            }, t('issue.openInBrowser'))),
-          h('div', { className: 'dsh-gti-kv' },
-            h('span', { className: 'dsh-gti-kv-key' }, t('issue.labels')),
-            h('span', { className: 'dsh-gti-kv-value' }, issue.labels.length === 0 ? t('common.none') : h('span', { className: 'dsh-gti-choices' }, h(LabelChips, { labels: issue.labels }))),
-            h('span', { className: 'dsh-gti-kv-key' }, t('issue.assignees')),
-            h('span', { className: 'dsh-gti-kv-value' }, issue.assignees.length === 0 ? t('common.none') : joinNames(issue.assignees, (user) => `@${user.login}`)),
-            h('span', { className: 'dsh-gti-kv-key' }, t('issue.milestone')),
-            h('span', { className: 'dsh-gti-kv-value' }, issue.milestone === null ? t('common.none') : issue.milestone.title),
-            h('span', { className: 'dsh-gti-kv-key' }, t('issue.due')),
-            h('span', { className: 'dsh-gti-kv-value' }, issue.dueDate === null ? t('common.none') : shortTime(issue.dueDate)),
-            h('span', { className: 'dsh-gti-kv-key' }, t('issue.author')),
-            h('span', { className: 'dsh-gti-kv-value' }, issue.user === null ? t('common.none') : `@${issue.user.login}`),
-            h('span', { className: 'dsh-gti-kv-key' }, t('issue.created')),
-            h('span', { className: 'dsh-gti-kv-value' }, `${shortTime(issue.createdAt)} · ${t('issue.updated')} ${shortTime(issue.updatedAt)}`)),
-          h('div', { className: 'dsh-gti-body-text' }, issue.body === ''
-            ? t('issue.bodyEmpty')
-            : (renderMarkdownImages(issue.body, imageStates, t, `body-${issue.index}`) ?? issue.body)),
-          h('div', { className: 'dsh-gti-actions' },
-            action(issue.state === 'open' ? t('issue.close') : t('issue.reopen'), 'issue.edit', { state: issue.state === 'open' ? 'closed' : 'open' }),
-            action(issue.pinned ? t('issue.unpin') : t('issue.pin'), issue.pinned ? 'issue.unpin' : 'issue.pin'),
-            action(issue.locked ? t('issue.unlock') : t('issue.lock'), issue.locked ? 'issue.unlock' : 'issue.lock'),
-            action(detail.subscribed ? t('issue.unsubscribe') : t('issue.subscribe'), detail.subscribed ? 'issue.unsubscribe' : 'issue.subscribe', {}, { reload: false, success: detail.subscribed ? undefined : t('issue.subscribed') }),
-            // 「发送到 DSH」：只有工作区看板给了 `onSend` 才出现（全局看板不碰别人的输入框）。
-            onSend === undefined ? null : h('button', {
-              type: 'button',
-              className: 'dsh-gti-button',
-              title: t('send.hint'),
-              'data-gti-send': 'true',
-              onClick: () => onSend(issue),
-            }, t('send.action'))),
-
-          h('div', { className: 'dsh-gti-section', 'data-gti-section': 'deps' },
-            h('div', { className: 'dsh-gti-section-head' }, t('deps.title')),
-            detail.dependencies.length === 0
-              ? h('p', { className: 'dsh-gti-note' }, t('deps.empty'))
-              : h('div', null, detail.dependencies.map((item) => h('div', { key: item.index, className: 'dsh-gti-note' },
-                h('button', {
+          h('div', { className: 'dsh-gti-issue' },
+            h('div', { className: 'dsh-gti-issue-head' },
+              h('h2', { className: 'dsh-gti-issue-title' },
+                h('span', { className: 'dsh-gti-issue-number' }, `#${issue.index}`),
+                issue.title),
+              h('div', { className: 'dsh-gti-issue-head-actions' },
+                // 「发送到 DSH」：只有工作区看板给了 `onSend` 才出现（全局看板不碰别人的输入框）。
+                onSend === undefined ? null : h('button', {
                   type: 'button',
                   className: 'dsh-gti-button',
-                  onClick: () => onEdit(null, { index: item.index }),
-                }, `#${item.index}`),
-                ' ',
-                item.title))),
-            h('div', { className: 'dsh-gti-field-row' },
-              h('input', {
-                className: 'dsh-gti-input',
-                value: depInput,
-                placeholder: t('deps.placeholder'),
-                'data-gti-dep-input': 'true',
-                onChange: (event) => setDepInput(event.target.value.replace(/[^0-9]/g, '')),
-              }),
-              h('button', {
-                type: 'button',
-                className: 'dsh-gti-button',
-                disabled: busy !== null || depInput === '',
-                onClick: () => void act('deps', () => api.gitea('issue.dependencies.add', { ...target, dependsOn: Number(depInput) })).then((done) => { if (done) setDepInput('') }),
-              }, t('deps.add')))),
-          h('div', { className: 'dsh-gti-section', 'data-gti-section': 'blocks' },
-            h('div', { className: 'dsh-gti-section-head' }, t('blocks.title')),
-            detail.blocks.length === 0
-              ? h('p', { className: 'dsh-gti-note' }, t('blocks.empty'))
-              : h('div', null, detail.blocks.map((item) => h('div', { key: item.index, className: 'dsh-gti-note' }, `#${item.index} ${item.title}`))),
-            h('div', { className: 'dsh-gti-field-row' },
-              h('input', {
-                className: 'dsh-gti-input',
-                value: blockInput,
-                placeholder: t('deps.placeholder'),
-                'data-gti-block-input': 'true',
-                onChange: (event) => setBlockInput(event.target.value.replace(/[^0-9]/g, '')),
-              }),
-              h('button', {
-                type: 'button',
-                className: 'dsh-gti-button',
-                disabled: busy !== null || blockInput === '',
-                onClick: () => void act('blocks', () => api.gitea('issue.blocks.add', { ...target, dependsOn: Number(blockInput) })).then((done) => { if (done) setBlockInput('') }),
-              }, t('blocks.add')))),
-
-          h('div', { className: 'dsh-gti-section', 'data-gti-section': 'times' },
-            h('div', { className: 'dsh-gti-section-head' }, t('times.title'),
-              h('span', { className: 'dsh-gti-note' }, t('times.total', { duration: formatDuration(detail.times.reduce((sum, item) => sum + item.time, 0)) }))),
-            detail.times.length === 0
-              ? h('p', { className: 'dsh-gti-note' }, t('times.empty'))
-              : h('div', null, detail.times.map((entry) => h('div', { key: entry.id, className: 'dsh-gti-note' },
-                `${formatDuration(entry.time)} · ${entry.userName ?? '?'} · ${shortTime(entry.created)}`,
-                ' ',
-                h('button', {
-                  type: 'button',
+                  title: t('send.hint'),
+                  'data-gti-send': 'true',
+                  onClick: () => onSend(issue),
+                }, h(Icon, { name: 'send' }), h('span', null, t('send.action'))),
+                issue.htmlUrl === null ? null : h('a', {
                   className: 'dsh-gti-button',
-                  disabled: busy !== null,
-                  onClick: () => void act('times', () => api.gitea('issue.times.delete', { ...target, timeId: entry.id })),
-                }, t('times.delete'))))),
-            h('div', { className: 'dsh-gti-field-row' },
-              h('input', {
-                className: 'dsh-gti-input',
-                value: minutes,
-                'data-gti-time-minutes': 'true',
-                onChange: (event) => setMinutes(event.target.value.replace(/[^0-9]/g, '')),
-              }),
-              h('span', { className: 'dsh-gti-note' }, t('times.minutes')),
-              h('button', {
-                type: 'button',
-                className: 'dsh-gti-button',
-                disabled: busy !== null || minutes === '' || Number(minutes) <= 0,
-                onClick: () => void act('times', () => api.gitea('issue.times.add', { ...target, time: Number(minutes) * 60 })),
-              }, t('times.add')),
-              detail.times.length === 0 ? null : h('button', {
-                type: 'button',
-                className: 'dsh-gti-button',
-                disabled: busy !== null,
-                onClick: () => void act('times', () => api.gitea('issue.times.reset', { ...target })),
-              }, t('times.reset')))),
-
-          h('div', { className: 'dsh-gti-section', 'data-gti-section': 'assets' },
-            h('div', { className: 'dsh-gti-section-head' }, t('assets.title')),
-            detail.assets.length === 0
-              ? h('p', { className: 'dsh-gti-note' }, t('assets.empty'))
-              : h('div', null, detail.assets.map((asset) => h('div', { key: asset.id, className: 'dsh-gti-note' },
-                h('a', { href: asset.downloadUrl ?? undefined, target: '_blank', rel: 'noreferrer' }, asset.name ?? `#${asset.id}`),
-                ` · ${formatBytes(asset.size)} `,
-                h('button', {
-                  type: 'button',
-                  className: 'dsh-gti-button',
-                  disabled: busy !== null,
-                  onClick: () => {
-                    if (!window.confirm(t('assets.deleteConfirm'))) return
-                    void act('assets', () => api.gitea('issue.asset.delete', { ...target, attachmentId: asset.id }))
-                  },
-                }, t('common.delete'))))),
-            h('div', { className: 'dsh-gti-field-row' },
-              h('label', { className: 'dsh-gti-button', 'data-gti-upload': 'true' },
-                busy === 'upload' ? t('assets.uploading') : t('assets.upload'),
-                h('input', {
-                  type: 'file',
-                  style: { display: 'none' },
-                  onChange: (event) => {
-                    const file = event.target.files?.[0]
-                    event.target.value = ''
-                    if (file === undefined) return
-                    if (file.size > MAX_ATTACHMENT_BYTES) {
-                      setNotice({ tone: 'error', text: t('assets.tooLarge', { limit: formatBytes(MAX_ATTACHMENT_BYTES) }) })
-                      return
-                    }
-                    void (async () => {
-                      setBusy('upload')
-                      const dataBase64 = await fileToBase64(file)
-                      const result = await api.gitea('issue.assets.upload', {
-                        ...target,
-                        name: file.name,
-                        filename: file.name,
-                        contentType: file.type === '' ? 'application/octet-stream' : file.type,
-                        dataBase64,
-                      })
-                      setBusy(null)
-                      if (!result.ok) {
-                        setNotice({ tone: 'error', text: t('assets.failed', { message: failureText(t, result) }) })
-                        return
-                      }
-                      await reload()
-                    })()
-                  },
-                })))),
-
-          h('div', { className: 'dsh-gti-section', 'data-gti-section': 'comments' },
-            h('div', { className: 'dsh-gti-section-head' }, `${t('comments.title')}（${detail.comments.length}）`),
-            detail.comments.length === 0
-              ? h('p', { className: 'dsh-gti-note' }, t('comments.empty'))
-              : h('div', null, detail.comments.map((comment) => h('div', { key: comment.id, className: 'dsh-gti-comment', 'data-gti-comment': comment.id },
-                h('div', { className: 'dsh-gti-comment-head' },
-                  h('span', null, `@${comment.user?.login ?? '?'}`),
-                  h('span', null, shortTime(comment.createdAt)),
-                  h('span', { className: 'dsh-gti-spacer' }),
-                  h('button', {
-                    type: 'button',
-                    className: 'dsh-gti-button',
-                    disabled: busy !== null,
-                    onClick: () => { setEditingComment({ id: comment.id, body: comment.body }) },
-                  }, t('comments.edit')),
-                  h('button', {
-                    type: 'button',
-                    className: 'dsh-gti-button',
-                    disabled: busy !== null,
-                    onClick: () => {
-                      if (!window.confirm(t('comments.deleteConfirm'))) return
-                      void act('comment', () => api.gitea('comment.delete', { owner: target.owner, repo: target.repo, serverId: target.serverId, id: comment.id }))
-                    },
-                  }, t('comments.delete'))),
-                editingComment !== null && editingComment.id === comment.id
-                  ? h('div', null,
-                    h('textarea', {
-                      className: 'dsh-gti-textarea',
-                      value: editingComment.body,
-                      onChange: (event) => setEditingComment({ id: comment.id, body: event.target.value }),
-                    }),
-                    h('div', { className: 'dsh-gti-actions' },
-                      h('button', {
-                        type: 'button',
-                        className: 'dsh-gti-button',
-                        'data-primary': 'true',
-                        disabled: busy !== null || editingComment.body.trim() === '',
-                        onClick: () => void act('comment', () => api.gitea('comment.edit', {
-                          owner: target.owner,
-                          repo: target.repo,
-                          serverId: target.serverId,
-                          id: comment.id,
-                          body: editingComment.body,
-                        })).then((done) => { if (done) setEditingComment(null) }),
-                      }, t('common.save')),
-                      h('button', { type: 'button', className: 'dsh-gti-button', onClick: () => setEditingComment(null) }, t('common.cancel'))))
-                  : h('div', { className: 'dsh-gti-comment-body' },
-                    renderMarkdownImages(comment.body, imageStates, t, `comment-${comment.id}`) ?? comment.body)))),
-            h('div', null,
-              h(MarkdownEditor, {
-                api,
-                t,
-                value: draft,
-                onChange: setDraft,
-                placeholder: t('comments.placeholder'),
-                previewTarget: { serverId: target.serverId, owner: target.owner, repo: target.repo },
-                disabled: busy !== null,
-                dropProps: commentImages.dropProps,
-                bodyAttr: 'data-gti-comment-draft',
-                rows: 6,
-              },
-                h('div', { className: 'dsh-gti-image-bar' },
-                  h('label', { className: 'dsh-gti-button', 'data-gti-image-pick': 'true' },
-                    commentImages.busy ? t('image.uploading') : t('image.upload'),
-                    h('input', {
-                      type: 'file',
-                      accept: 'image/*',
-                      multiple: true,
-                      'data-gti-image-input': 'true',
-                      style: { display: 'none' },
-                      onChange: (event) => {
-                        const files = Array.from(event.target.files ?? [])
-                        event.target.value = ''
-                        void commentImages.accept(files, undefined)
-                      },
-                    })),
-                  h('span', { className: 'dsh-gti-note' }, t('image.hint'))),
-                h(ImageCards, { t, items: commentCards }),
-                commentImages.notice === null ? null : h(Banner, { tone: commentImages.notice.tone, text: commentImages.notice.text })),
-              h('div', { className: 'dsh-gti-actions' },
+                  href: issue.htmlUrl,
+                  target: '_blank',
+                  rel: 'noreferrer',
+                  title: t('issue.openInBrowser'),
+                  'data-gti-external': 'true',
+                }, h(Icon, { name: 'external' }), h('span', null, t('issue.openInBrowser'))),
                 h('button', {
                   type: 'button',
                   className: 'dsh-gti-button',
                   'data-primary': 'true',
-                  disabled: busy !== null || commentImages.busy || draft.trim() === '',
-                  'data-gti-comment-submit': 'true',
-                  onClick: () => void act('comment', () => api.gitea('issue.comments.create', { ...target, body: draft }))
-                    .then((done) => { if (done) { setDraft(''); commentImages.setNotice(null) } }),
-                }, busy === 'comment' ? t('comments.saving') : t('comments.submit')),
-                meta === null ? null : h('span', { className: 'dsh-gti-note' }, `${t('meta.labels', { n: meta.labels.length })} · ${t('meta.milestones', { n: meta.milestones.length })}`))))))
+                  disabled: busy !== null,
+                  'data-gti-edit': 'true',
+                  onClick: () => onEdit(issue),
+                }, h(Icon, { name: 'edit' }), h('span', null, t('common.edit'))))),
+
+            h('div', { className: 'dsh-gti-issue-meta' },
+              h(StateChip, { state: issue.state, t }),
+              h('span', null, t('issue.by', {
+                user: `@${issue.user?.login ?? '?'}`,
+                time: shortTime(issue.createdAt),
+              })),
+              h('span', null, `· ${t('issue.commentCount', { n: detail.comments.length })}`),
+              issue.pinned ? h('span', { className: 'dsh-gti-chip', 'data-tone': 'brand' }, `📌 ${t('issue.pin')}`) : null,
+              issue.locked ? h('span', { className: 'dsh-gti-chip' }, `🔒 ${t('issue.lock')}`) : null),
+
+            h('div', { className: 'dsh-gti-issue-layout', 'data-gti-issue-layout': 'true' },
+              h('div', { className: 'dsh-gti-timeline', 'data-gti-timeline': 'true' },
+                // 正文按 Gitea 的摆法当成第一张评论卡片：谁提的、什么时候、说了什么。
+                h('article', {
+                  className: 'dsh-gti-comment-card',
+                  'data-gti-issue-body': issueKey(issue),
+                },
+                  h('div', { className: 'dsh-gti-comment-card-head' },
+                    h(Avatar, { user: issue.user, size: 'large' }),
+                    h('span', { className: 'dsh-gti-comment-card-author' }, `@${issue.user?.login ?? '?'}`),
+                    h('span', null, t('issue.openedAt', { time: shortTime(issue.createdAt) }))),
+                  h('div', {
+                    className: 'dsh-gti-comment-card-body',
+                    'data-empty': String(issue.body) === '' ? 'true' : undefined,
+                  }, String(issue.body) === ''
+                    ? t('issue.opEmpty')
+                    : (renderMarkdownImages(issue.body, imageStates, t, `body-${issue.index}`) ?? issue.body))),
+
+                // 关闭事件：只写得出「什么时候关的」，不编造「谁关的」。
+                issue.state === 'closed' && issue.closedAt !== null
+                  ? h(EventRow, {
+                    tone: 'closed',
+                    icon: 'close',
+                    text: t('issue.closedEvent', { time: shortTime(issue.closedAt) }),
+                  })
+                  : null,
+
+                detail.comments.map((comment) => h('article', {
+                  key: comment.id,
+                  className: 'dsh-gti-comment-card',
+                  'data-gti-comment': String(comment.id),
+                },
+                  h('div', { className: 'dsh-gti-comment-card-head' },
+                    h(Avatar, { user: comment.user }),
+                    h('span', { className: 'dsh-gti-comment-card-author' }, `@${comment.user?.login ?? '?'}`),
+                    h('span', null, t('issue.commentedAt', { time: shortTime(comment.createdAt) })),
+                    comment.user !== null && issue.user !== null && comment.user.login === issue.user.login
+                      ? h('span', { className: 'dsh-gti-chip', 'data-gti-role': 'author' }, t('issue.roleAuthor'))
+                      : null,
+                    comment.updatedAt !== null && comment.updatedAt !== undefined && comment.updatedAt !== comment.createdAt
+                      ? h('span', { 'data-gti-edited': 'true' }, `· ${t('issue.edited')}`)
+                      : null,
+                    h('span', { className: 'dsh-gti-comment-card-tools' },
+                      h('button', {
+                        type: 'button',
+                        className: 'dsh-gti-icon-button',
+                        title: t('comments.edit'),
+                        disabled: busy !== null,
+                        'data-gti-comment-edit': String(comment.id),
+                        onClick: () => setEditingComment({ id: comment.id, body: comment.body }),
+                      }, h(Icon, { name: 'edit' })),
+                      h('button', {
+                        type: 'button',
+                        className: 'dsh-gti-icon-button',
+                        title: t('comments.delete'),
+                        disabled: busy !== null,
+                        'data-gti-comment-delete': String(comment.id),
+                        onClick: () => {
+                          if (!window.confirm(t('comments.deleteConfirm'))) return
+                          void act('comment', () => api.gitea('comment.delete', {
+                            owner: target.owner,
+                            repo: target.repo,
+                            serverId: target.serverId,
+                            id: comment.id,
+                          }))
+                        },
+                      }, h(Icon, { name: 'trash' })))),
+                  editingComment !== null && editingComment.id === comment.id
+                    ? h('div', { className: 'dsh-gti-comment-card-body', style: { whiteSpace: 'normal' } },
+                      h('textarea', {
+                        className: 'dsh-gti-textarea',
+                        value: editingComment.body,
+                        'data-gti-comment-edit-body': String(comment.id),
+                        onChange: (event) => setEditingComment({ id: comment.id, body: event.target.value }),
+                      }),
+                      h('div', { className: 'dsh-gti-actions' },
+                        h('button', {
+                          type: 'button',
+                          className: 'dsh-gti-button',
+                          'data-primary': 'true',
+                          disabled: busy !== null || editingComment.body.trim() === '',
+                          onClick: () => void act('comment', () => api.gitea('comment.edit', {
+                            owner: target.owner,
+                            repo: target.repo,
+                            serverId: target.serverId,
+                            id: comment.id,
+                            body: editingComment.body,
+                          })).then((done) => { if (done) setEditingComment(null) }),
+                        }, t('common.save')),
+                        h('button', {
+                          type: 'button',
+                          className: 'dsh-gti-button',
+                          onClick: () => setEditingComment(null),
+                        }, t('common.cancel'))))
+                    : h('div', {
+                      className: 'dsh-gti-comment-card-body',
+                      'data-empty': String(comment.body) === '' ? 'true' : undefined,
+                    }, String(comment.body) === ''
+                      ? t('issue.opEmpty')
+                      : (renderMarkdownImages(comment.body, imageStates, t, `comment-${comment.id}`) ?? comment.body)))),
+
+                // 评论框：Gitea 的「撰写 / 预览 + 工具栏 + 虚线拖放区 + 关闭工单 / 评论」。
+                h('div', { className: 'dsh-gti-comment-editor', 'data-gti-editor-comment': 'true' },
+                  h(MarkdownEditor, {
+                    api,
+                    t,
+                    value: draft,
+                    onChange: setDraft,
+                    placeholder: t('comments.placeholder'),
+                    previewTarget: { serverId: target.serverId, owner: target.owner, repo: target.repo },
+                    disabled: busy !== null,
+                    dropProps: commentImages.dropProps,
+                    bodyAttr: 'data-gti-comment-draft',
+                    rows: 6,
+                  },
+                    h('label', {
+                      className: 'dsh-gti-dropzone',
+                      'data-gti-dropzone': 'true',
+                      'data-gti-image-pick': 'true',
+                      title: t('image.hint'),
+                      ...commentImages.dropProps,
+                    },
+                      commentImages.busy ? t('image.uploading') : t('editor.dropHint'),
+                      h('input', {
+                        type: 'file',
+                        accept: 'image/*',
+                        multiple: true,
+                        'data-gti-image-input': 'true',
+                        style: { display: 'none' },
+                        onChange: (event) => {
+                          const files = Array.from(event.target.files ?? [])
+                          event.target.value = ''
+                          void commentImages.accept(files, undefined)
+                        },
+                      })),
+                    h(ImageCards, { t, items: commentCards }),
+                    commentImages.notice === null ? null : h(Banner, { tone: commentImages.notice.tone, text: commentImages.notice.text })),
+                  h('div', { className: 'dsh-gti-comment-footer' },
+                    h('button', {
+                      type: 'button',
+                      className: 'dsh-gti-button',
+                      'data-danger': issue.state === 'open' ? 'true' : undefined,
+                      'data-gti-action': 'issue.edit',
+                      disabled: busy !== null,
+                      onClick: () => void act('issue.edit', () => api.gitea('issue.edit', {
+                        ...target,
+                        state: issue.state === 'open' ? 'closed' : 'open',
+                      })),
+                    },
+                      h(Icon, { name: issue.state === 'open' ? 'close' : 'check' }),
+                      h('span', null, issue.state === 'open' ? t('issue.close') : t('issue.reopen'))),
+                    h('span', { className: 'dsh-gti-spacer' }),
+                    h('button', {
+                      type: 'button',
+                      className: 'dsh-gti-button',
+                      'data-primary': 'true',
+                      disabled: busy !== null || commentImages.busy || draft.trim() === '',
+                      'data-gti-comment-submit': 'true',
+                      onClick: () => void act('comment', () => api.gitea('issue.comments.create', { ...target, body: draft }))
+                        .then((done) => { if (done) { setDraft(''); commentImages.setNotice(null) } }),
+                    }, busy === 'comment' ? t('comments.saving') : t('comments.submit'))))),
+
+              // 右栏：Gitea 的 issue 侧栏（标签 / 指派 / 里程碑 / 截止 / 参与者 / 依赖 / 工时 / 附件 / 引用 / 通知）。
+              h('aside', { className: 'dsh-gti-issue-side', 'data-gti-side': 'true' },
+                h(SideGroup, { title: t('issue.labels') },
+                  issue.labels.length === 0
+                    ? h('div', { className: 'dsh-gti-side-value', 'data-empty': 'true', 'data-gti-side-empty': 'labels' }, t('issue.noLabels'))
+                    : h('div', { className: 'dsh-gti-choices' }, h(LabelChips, { labels: issue.labels }))),
+
+                h(SideGroup, { title: t('issue.assignees') },
+                  issue.assignees.length === 0
+                    ? h('div', { className: 'dsh-gti-side-value', 'data-empty': 'true', 'data-gti-side-empty': 'assignees' }, t('issue.noAssignees'))
+                    : h('div', { className: 'dsh-gti-side-list' }, issue.assignees.map((user) => h('div', {
+                      key: user.login,
+                      className: 'dsh-gti-side-row',
+                    }, h(Avatar, { user }), h('span', null, `@${user.login}`))))),
+
+                h(SideGroup, { title: t('issue.milestone') },
+                  issue.milestone === null
+                    ? h('div', { className: 'dsh-gti-side-value', 'data-empty': 'true' }, t('issue.noMilestone'))
+                    : h('div', { className: 'dsh-gti-side-value' }, `◎ ${issue.milestone.title}`)),
+
+                h(SideGroup, { title: t('issue.due') },
+                  issue.dueDate === null
+                    ? h('div', { className: 'dsh-gti-side-value', 'data-empty': 'true' }, t('issue.noDue'))
+                    : h('div', { className: 'dsh-gti-side-value' }, `⏱ ${shortTime(issue.dueDate)}`)),
+
+                detail.subscribers.length === 0 ? null : h(SideGroup, {
+                  title: t('issue.participants'),
+                  toolbar: h('span', { className: 'dsh-gti-note' }, String(detail.subscribers.length)),
+                }, h('div', { className: 'dsh-gti-choices' }, detail.subscribers.map((user) => h(Avatar, {
+                  key: user.login,
+                  user,
+                  size: 'large',
+                })))),
+
+                h(SideGroup, {
+                  title: t('deps.title'),
+                  toolbar: h('span', { className: 'dsh-gti-note' }, t('deps.add')),
+                },
+                  detail.dependencies.length === 0
+                    ? h('div', { className: 'dsh-gti-side-value', 'data-empty': 'true' }, t('deps.empty'))
+                    : h('div', { className: 'dsh-gti-side-list' }, detail.dependencies.map((item) => h('div', {
+                      key: item.index,
+                      className: 'dsh-gti-side-row',
+                    },
+                      h('span', { className: 'dsh-gti-code', 'data-gti-dependency': String(item.index) }, `#${item.index}`),
+                      h('span', { className: 'dsh-gti-side-row-title', title: item.title }, item.title),
+                      h('button', {
+                        type: 'button',
+                        className: 'dsh-gti-icon-button',
+                        title: t('common.delete'),
+                        disabled: busy !== null,
+                        onClick: () => void act('deps', () => api.gitea('issue.dependencies.remove', {
+                          ...target,
+                          dependsOn: item.index,
+                        })),
+                      }, h(Icon, { name: 'close', size: 12 }))))),
+                  sideAdd(depInput, setDepInput, t('deps.placeholder'), 'data-gti-dep-input', () =>
+                    void act('deps', () => api.gitea('issue.dependencies.add', { ...target, dependsOn: Number(depInput) }))
+                      .then((done) => { if (done) setDepInput('') }))),
+
+                h(SideGroup, {
+                  title: t('blocks.title'),
+                  toolbar: h('span', { className: 'dsh-gti-note' }, t('blocks.add')),
+                },
+                  detail.blocks.length === 0
+                    ? h('div', { className: 'dsh-gti-side-value', 'data-empty': 'true' }, t('blocks.empty'))
+                    : h('div', { className: 'dsh-gti-side-list' }, detail.blocks.map((item) => h('div', {
+                      key: item.index,
+                      className: 'dsh-gti-side-row',
+                    },
+                      h('span', null, `#${item.index}`),
+                      h('span', { className: 'dsh-gti-side-row-title', title: item.title }, item.title),
+                      h('button', {
+                        type: 'button',
+                        className: 'dsh-gti-icon-button',
+                        title: t('common.delete'),
+                        disabled: busy !== null,
+                        onClick: () => void act('blocks', () => api.gitea('issue.blocks.remove', {
+                          ...target,
+                          dependsOn: item.index,
+                        })),
+                      }, h(Icon, { name: 'close', size: 12 }))))),
+                  sideAdd(blockInput, setBlockInput, t('deps.placeholder'), 'data-gti-block-input', () =>
+                    void act('blocks', () => api.gitea('issue.blocks.add', { ...target, dependsOn: Number(blockInput) }))
+                      .then((done) => { if (done) setBlockInput('') }))),
+
+                h(SideGroup, {
+                  title: t('times.title'),
+                  toolbar: h('span', { className: 'dsh-gti-note' }, t('times.total', {
+                    duration: formatDuration(detail.times.reduce((sum, item) => sum + item.time, 0)),
+                  })),
+                },
+                  detail.times.length === 0
+                    ? h('div', { className: 'dsh-gti-side-value', 'data-empty': 'true' }, t('times.empty'))
+                    : h('div', { className: 'dsh-gti-side-list' }, detail.times.map((entry) => h('div', {
+                      key: entry.id,
+                      className: 'dsh-gti-side-row',
+                    },
+                      h('span', { className: 'dsh-gti-side-row-title' }, `${formatDuration(entry.time)} · ${entry.userName ?? '?'} · ${shortTime(entry.created)}`),
+                      h('button', {
+                        type: 'button',
+                        className: 'dsh-gti-icon-button',
+                        title: t('times.delete'),
+                        disabled: busy !== null,
+                        onClick: () => void act('times', () => api.gitea('issue.times.delete', { ...target, timeId: entry.id })),
+                      }, h(Icon, { name: 'close', size: 12 }))))),
+                  h('div', { className: 'dsh-gti-side-add' },
+                    h('input', {
+                      className: 'dsh-gti-input',
+                      value: minutes,
+                      title: t('times.minutes'),
+                      'data-gti-time-minutes': 'true',
+                      onChange: (event) => setMinutes(event.target.value.replace(/[^0-9]/g, '')),
+                    }),
+                    h('span', { className: 'dsh-gti-note' }, t('times.minutes')),
+                    h('button', {
+                      type: 'button',
+                      className: 'dsh-gti-icon-button',
+                      title: t('times.add'),
+                      disabled: busy !== null || minutes === '' || Number(minutes) <= 0,
+                      onClick: () => void act('times', () => api.gitea('issue.times.add', { ...target, time: Number(minutes) * 60 })),
+                    }, h(Icon, { name: 'plus' }))),
+                  detail.times.length === 0 ? null : h('button', {
+                    type: 'button',
+                    className: 'dsh-gti-link-button',
+                    disabled: busy !== null,
+                    onClick: () => void act('times', () => api.gitea('issue.times.reset', { ...target })),
+                  }, t('times.reset'))),
+
+                h(SideGroup, { title: t('assets.title') },
+                  detail.assets.length === 0
+                    ? h('div', { className: 'dsh-gti-side-value', 'data-empty': 'true' }, t('assets.empty'))
+                    : h('div', { className: 'dsh-gti-side-list' }, detail.assets.map((asset) => h('div', {
+                      key: asset.id,
+                      className: 'dsh-gti-side-row',
+                    },
+                      h('a', {
+                        className: 'dsh-gti-side-row-title',
+                        href: asset.downloadUrl ?? undefined,
+                        target: '_blank',
+                        rel: 'noreferrer',
+                        title: asset.name ?? `#${asset.id}`,
+                      }, asset.name ?? `#${asset.id}`),
+                      h('span', { className: 'dsh-gti-note' }, formatBytes(asset.size)),
+                      h('button', {
+                        type: 'button',
+                        className: 'dsh-gti-icon-button',
+                        title: t('common.delete'),
+                        disabled: busy !== null,
+                        onClick: () => {
+                          if (!window.confirm(t('assets.deleteConfirm'))) return
+                          void act('assets', () => api.gitea('issue.asset.delete', { ...target, attachmentId: asset.id }))
+                        },
+                      }, h(Icon, { name: 'trash', size: 12 }))))),
+                  h('label', { className: 'dsh-gti-side-button', 'data-gti-upload': 'true' },
+                    h(Icon, { name: 'upload' }),
+                    h('span', null, busy === 'upload' ? t('assets.uploading') : t('assets.upload')),
+                    h('input', {
+                      type: 'file',
+                      style: { display: 'none' },
+                      onChange: (event) => {
+                        const file = event.target.files?.[0]
+                        event.target.value = ''
+                        if (file === undefined) return
+                        if (file.size > MAX_ATTACHMENT_BYTES) {
+                          setNotice({ tone: 'error', text: t('assets.tooLarge', { limit: formatBytes(MAX_ATTACHMENT_BYTES) }) })
+                          return
+                        }
+                        void (async () => {
+                          setBusy('upload')
+                          const dataBase64 = await fileToBase64(file)
+                          const result = await api.gitea('issue.assets.upload', {
+                            ...target,
+                            name: file.name,
+                            filename: file.name,
+                            contentType: file.type === '' ? 'application/octet-stream' : file.type,
+                            dataBase64,
+                          })
+                          setBusy(null)
+                          if (!result.ok) {
+                            setNotice({ tone: 'error', text: t('assets.failed', { message: failureText(t, result) }) })
+                            return
+                          }
+                          await reload()
+                        })()
+                      },
+                    }))),
+
+                h(SideGroup, { title: t('issue.reference') },
+                  h('div', { className: 'dsh-gti-side-add' },
+                    h('code', { className: 'dsh-gti-code', style: { flex: '1 1 auto' } }, reference),
+                    h('button', {
+                      type: 'button',
+                      className: 'dsh-gti-icon-button',
+                      title: t('issue.copyRef'),
+                      'data-gti-copy-ref': 'true',
+                      onClick: copyReference,
+                    }, h(Icon, { name: 'copy' }))),
+                  refCopied ? h('div', { className: 'dsh-gti-note', 'data-tone': 'success', 'data-gti-ref-copied': 'true' }, t('issue.refCopied')) : null),
+
+                h(SideGroup, { title: t('issue.notify') },
+                  h('button', {
+                    type: 'button',
+                    className: 'dsh-gti-side-button',
+                    disabled: busy !== null,
+                    'data-gti-action': subscribeOp,
+                    onClick: () => void act('subscribe', () => api.gitea(subscribeOp, { ...target }), {
+                      reload: false,
+                      success: detail.subscribed ? undefined : t('issue.subscribed'),
+                    }),
+                  }, h(Icon, { name: 'comment' }), h('span', null, detail.subscribed ? t('issue.unsubscribe') : t('issue.subscribe')))),
+
+                h('div', { className: 'dsh-gti-side-actions' },
+                  sideAction(issue.pinned ? t('issue.unpin') : t('issue.pin'), pinOp, () =>
+                    act(pinOp, () => api.gitea(pinOp, { ...target })), { icon: 'pin' }),
+                  sideAction(issue.locked ? t('issue.unlock') : t('issue.lock'), lockOp, () =>
+                    act(lockOp, () => api.gitea(lockOp, { ...target })), { icon: 'lock' }),
+                  sideAction(t('issue.delete'), 'issue.delete', removeIssue, { icon: 'trash', danger: true })))))))
     }
 
     // ── 配置与绑定的公共钩子 ────────────────────────────────────────────────
@@ -3580,8 +3967,8 @@ window.__ModuleLoader__.load({
         onDone(edited.data)
       }
 
+      // 页头由调用方（看板）那条 bar 出：这里再加一层「返回 + 标题」就是同一个东西写两遍。
       return h('div', { className: 'dsh-gti-scroll', 'data-gti-editor': mode },
-        h('div', { className: 'dsh-gti-section-head' }, mode === 'create' ? t('form.createTitle') : t('form.editTitle')),
         error === null ? null : h(Banner, { tone: 'error', text: error }),
         created === null ? null : h('div', { className: 'dsh-gti-actions', style: { padding: '0 16px 8px' } },
           h('button', {
@@ -4033,7 +4420,7 @@ window.__ModuleLoader__.load({
         return h('div', { className: 'dsh-gti-root', 'data-gti-global': 'true' },
           h('style', null, CSS),
           h('div', { className: 'dsh-gti-bar' },
-            h('button', { type: 'button', className: 'dsh-gti-icon-button', title: t('common.back'), onClick: () => setView({ kind: 'list' }) }, h(Icon, { name: 'back' })),
+            h('button', { type: 'button', className: 'dsh-gti-icon-button', title: t('common.back'), 'data-gti-editor-back': 'true', onClick: () => setView({ kind: 'list' }) }, h(Icon, { name: 'back' })),
             h('span', { className: 'dsh-gti-bar-title' }, t('form.createTitle'))),
           h('div', { className: 'dsh-gti-scroll' },
             h(TargetPicker, { api, t, config, value: target, onChange: (next) => setView({ kind: 'create', ...next }) }),
@@ -4053,7 +4440,7 @@ window.__ModuleLoader__.load({
         return h('div', { className: 'dsh-gti-root', 'data-gti-global': 'true' },
           h('style', null, CSS),
           h('div', { className: 'dsh-gti-bar' },
-            h('button', { type: 'button', className: 'dsh-gti-icon-button', title: t('common.back'), onClick: () => setView({ kind: 'detail', issue: view.issue }) }, h(Icon, { name: 'back' })),
+            h('button', { type: 'button', className: 'dsh-gti-icon-button', title: t('common.back'), 'data-gti-editor-back': 'true', onClick: () => setView({ kind: 'detail', issue: view.issue }) }, h(Icon, { name: 'back' })),
             h('span', { className: 'dsh-gti-bar-title' }, t('form.editTitle'))),
           h(IssueEditorView, {
             api,
@@ -4399,7 +4786,7 @@ window.__ModuleLoader__.load({
         return h('div', { className: 'dsh-gti-root', 'data-gti-workspace': 'true' },
           h('style', null, CSS),
           h('div', { className: 'dsh-gti-bar' },
-            h('button', { type: 'button', className: 'dsh-gti-icon-button', title: t('common.back'), onClick: () => setView({ kind: 'list' }) }, h(Icon, { name: 'back' })),
+            h('button', { type: 'button', className: 'dsh-gti-icon-button', title: t('common.back'), 'data-gti-editor-back': 'true', onClick: () => setView({ kind: 'list' }) }, h(Icon, { name: 'back' })),
             h('span', { className: 'dsh-gti-bar-title' }, t('form.createTitle'))),
           h(IssueEditorView, {
             api,
@@ -4415,7 +4802,7 @@ window.__ModuleLoader__.load({
         return h('div', { className: 'dsh-gti-root', 'data-gti-workspace': 'true' },
           h('style', null, CSS),
           h('div', { className: 'dsh-gti-bar' },
-            h('button', { type: 'button', className: 'dsh-gti-icon-button', title: t('common.back'), onClick: () => setView({ kind: 'detail', issue: view.issue }) }, h(Icon, { name: 'back' })),
+            h('button', { type: 'button', className: 'dsh-gti-icon-button', title: t('common.back'), 'data-gti-editor-back': 'true', onClick: () => setView({ kind: 'detail', issue: view.issue }) }, h(Icon, { name: 'back' })),
             h('span', { className: 'dsh-gti-bar-title' }, t('form.editTitle'))),
           h(IssueEditorView, {
             api,

@@ -18,7 +18,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（130 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（139 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -44,7 +44,7 @@
 | [lib/triggers.js](lib/triggers.js) | **纯函数**：账本 + issues + 评论 → 触发（矩阵的主战场） |
 | [lib/watchstore.js](lib/watchstore.js) | 自动分配账本 `watch.json`：schema、收敛、剪枝 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 130 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 139 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 | [docs/auto-assign-design.md](docs/auto-assign-design.md) | 自动分配的设计稿：口径、账本、幂等闸门、边界 |
@@ -176,6 +176,20 @@
     `<a>`（私有地址点了 404）。旧 Host 回 `unknown-operation` 时预览页签写「重启 Harness」。
     工具栏是纯文本插入（`applyEditorTool` 纯函数），别改成 contenteditable/WYSIWYG。
     附件卡片「移除文件」= 删正文引用 + 按附件 id 删远端（拿不到 id 只删引用）。
+30. **issue 详情页照 Gitea 的 issue 页排**（issue #2 给的参考截图）：标题区（`#编号` + 标题 +
+    「发送到 DSH / 在浏览器打开 / 编辑」）→ 元信息行 → 左列时间线 / 右列属性栏。别退回成
+    「元信息表格 + 一排动作按钮 + 几块堆叠 section」。几条别动：
+    - **正文是第一张评论卡片**（和评论共用 `.dsh-gti-comment-card`），空正文写「没有提供说明。」；
+    - 两列靠 `flex-wrap`（`flex:1 1 320px` + `flex:0 0 216px`）自适应，**不要媒体查询**：
+      要看的是容器宽度（全局看板详情只有半屏），窄了就整列掉下去；
+    - **关闭 / 重开在评论编辑器底部左侧**，置顶 / 锁定 / 删除在属性栏底部整宽按钮；
+    - **关闭事件只写时间不写人**：`closed_at` 没有操作人，别猜；要写「谁关的」得先接
+      `issue.timeline`；
+    - 依赖 / 阻塞的 `#编号` 是**纯文本**（旧版那个按钮会打开当前 issue 的编辑页，假的跳转比
+      不能点更糟），相邻的「移除」是真的（`dependsOn` 传对端编号）；
+    - 复制类按钮走 `copyText()`（`navigator.clipboard` 只在安全上下文里有，局域网 http 下要退
+      `execCommand`），**失败不报成功**；头像直连 `/avatars/…`、`onError` 退首字母圆片；
+    - 详情页不读 `repo.meta`（那是仓库级数字，只有表单要候选名册）。
 
 ## 代码风格
 
@@ -247,6 +261,10 @@ node --check index.js && node --check client.js
   「界面长什么样」、「线上协议」、「只能在浏览器里看的」第 22 条与「已知边界」，
   [IMPLEMENTATION.md](IMPLEMENTATION.md) 的「编辑器外壳」一节；`tests/client.test.mjs` 里那四条
   编辑器用例跟着改。
+- **动「详情页版式」**（标题区、时间线与属性栏、评论卡片、关闭事件行、拖放区、依赖/阻塞条目、
+  复制引用、头像）→ 同步 README 的「界面长什么样 · 详情页」、「只能在浏览器里看的」第 5 / 8 /
+  9 / 10 / 23 条、[IMPLEMENTATION.md](IMPLEMENTATION.md) 的「详情页：为什么照 Gitea 的 issue 页
+  重排」与上面的约束 30；`tests/client.test.mjs` 里那批详情页用例跟着改。
 - **改文案键** → `zh` 与 `en` 一起改（探针会拦）。
 - **已知边界**写在 README 末尾；**没真正解决之前不要从文档里删掉**。
 
