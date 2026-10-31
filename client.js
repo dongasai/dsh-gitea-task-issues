@@ -101,6 +101,7 @@ window.__ModuleLoader__.load({
       'common.more': '更多操作',
       'common.confirmDelete': '确认删除？',
       'common.close': '关闭',
+      'common.collapse': '收起',
 
       'state.open': '进行中',
       'state.closed': '已关闭',
@@ -184,6 +185,18 @@ window.__ModuleLoader__.load({
       'issue.opEmpty': '没有提供说明。',
       'issue.deleteConfirm': '删除这条 issue？删除后不可恢复。',
       'issue.delete': '删除 issue',
+
+      // 属性栏的就地编辑（issue #4）：点组头右侧的铅笔展开，点选即保存，不必跳编辑页。
+      'side.edit': '就地编辑',
+      'side.filter': '筛选标签…',
+      'side.hint': '点选即保存，不用再进编辑页。',
+      'side.noMatch': '没有匹配的标签。',
+      'side.emptyLabels': '这个仓库还没有标签。',
+      'side.emptyAssignees': '没有可指派的用户。',
+      'side.emptyMilestones': '这个仓库还没有里程碑。',
+      'side.pickMilestone': '选择里程碑…',
+      'side.clearDue': '清除截止日期',
+      'side.metaFailed': '读不到候选：{message}',
 
       // 「发送到 DSH」：拼进对话输入框的提示词 + 三种结局的横幅。
       'send.action': '发送到 DSH',
@@ -451,6 +464,7 @@ window.__ModuleLoader__.load({
       'common.more': 'More actions',
       'common.confirmDelete': 'Delete?',
       'common.close': 'Close',
+      'common.collapse': 'Collapse',
 
       'state.open': 'Open',
       'state.closed': 'Closed',
@@ -533,6 +547,18 @@ window.__ModuleLoader__.load({
       'issue.opEmpty': 'No description provided.',
       'issue.deleteConfirm': 'Delete this issue? This cannot be undone.',
       'issue.delete': 'Delete issue',
+
+      // Inline property editing in the sidebar (issue #4): click the pencil, toggle, done.
+      'side.edit': 'Edit inline',
+      'side.filter': 'Filter labels…',
+      'side.hint': 'Changes are saved as you click; no need to open the edit page.',
+      'side.noMatch': 'No matching labels.',
+      'side.emptyLabels': 'This repository has no labels yet.',
+      'side.emptyAssignees': 'No assignable users.',
+      'side.emptyMilestones': 'This repository has no milestones yet.',
+      'side.pickMilestone': 'Pick a milestone…',
+      'side.clearDue': 'Clear due date',
+      'side.metaFailed': 'Cannot load options: {message}',
 
       // Send to DSH: the prompt inserted into the composer, plus the three outcomes.
       'send.action': 'Send to DSH',
@@ -859,6 +885,15 @@ window.__ModuleLoader__.load({
 .dsh-gti-comment-footer .dsh-gti-spacer{flex:1 1 auto}
 /* 属性栏：Gitea 右栏那种「小标题 + 值」的分组，组间用细线分开，空态用灰色说明。 */
 .dsh-gti-side-group{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-bottom:.5px solid var(--dsw-alias-border-l1);font-size:12px}
+/* 就地编辑（issue #4）：展开的那组左侧描一条主线，和「只是读」的组区分开。 */
+.dsh-gti-side-group[data-editing="true"]{border-left:2px solid var(--dsw-alias-brand-primary);padding-left:6px;margin-left:-8px}
+.dsh-gti-side-panel{display:flex;flex-direction:column;gap:6px;margin-top:2px;padding:6px;border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2)}
+.dsh-gti-side-panel-body{display:flex;flex-direction:column;gap:6px}
+.dsh-gti-side-panel .dsh-gti-input{font-size:11px;padding:2px 6px}
+.dsh-gti-side-panel .dsh-gti-select{font-size:11px;padding:2px 6px}
+.dsh-gti-side-panel .dsh-gti-choices{max-height:180px;overflow:auto}
+.dsh-gti-side-panel .dsh-gti-side-add{align-items:stretch}
+.dsh-gti-side-panel .dsh-gti-button{flex:1 1 auto;justify-content:center}
 .dsh-gti-side-head{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--dsw-alias-label-tertiary)}
 .dsh-gti-side-head .dsh-gti-spacer{flex:1 1 auto}
 .dsh-gti-side-value{color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}
@@ -1612,12 +1647,33 @@ window.__ModuleLoader__.load({
      * 详情页右侧属性栏的一组：小标题（右侧可挂一段说明）+ 值/列表。
      * @param props - `title` / `toolbar`（标题行右端）/ `children`。
      */
-    function SideGroup({ title, toolbar, children }) {
-      return h('div', { className: 'dsh-gti-side-group' },
+    /**
+     * 属性栏的一组（Gitea issue 侧栏的一条属性）。
+     *
+     * `onEdit` 给了就多一枚铅笔：详情页据此把「标签 / 指派 / 里程碑 / 截止日」**就地**展开编辑
+     * （issue #4：不用先进编辑页）。面板就地长在组里而不是浮层：全局看板的详情只占半屏，浮层
+     * 很容易被裁掉，而这一栏本来就窄。
+     *
+     * @param props - `title` / `toolbar`（组头右侧的说明）/ `onEdit`（展开/收起，可选）/
+     *   `editing`（是否展开）/ `editAttr`（铅笔上的 `data-gti-side-edit` 值）/ `editTitle` / `children`。
+     */
+    function SideGroup({ title, toolbar, onEdit, editing, editAttr, editTitle, children }) {
+      return h('div', {
+        className: 'dsh-gti-side-group',
+        'data-editing': editing === true ? 'true' : 'false',
+      },
         h('div', { className: 'dsh-gti-side-head' },
           h('span', null, title),
           h('span', { className: 'dsh-gti-spacer' }),
-          toolbar === undefined ? null : toolbar),
+          toolbar === undefined ? null : toolbar,
+          onEdit === undefined ? null : h('button', {
+            type: 'button',
+            className: 'dsh-gti-icon-button',
+            title: editTitle,
+            'aria-expanded': editing === true ? 'true' : 'false',
+            'data-gti-side-edit': editAttr,
+            onClick: onEdit,
+          }, h(Icon, { name: 'edit', size: 12 }))),
         children)
     }
 
@@ -2464,6 +2520,33 @@ window.__ModuleLoader__.load({
       const [minutes, setMinutes] = React.useState('30')
       /** 侧栏「引用」复制后的那一句提示（剪贴板不可用时不置位）。 */
       const [refCopied, setRefCopied] = React.useState(false)
+      /**
+       * 属性栏就地编辑（issue #4）：当前展开的是哪一组（同一时刻只展开一组，和 Gitea 一样），
+       * 以及它要的候选名册。名册**第一次展开才读** —— 只是看详情的人不该额外吃三个请求。
+       */
+      const [side, setSide] = React.useState(null)
+      const [sideMeta, setSideMeta] = React.useState(null)
+      const [sideMetaBusy, setSideMetaBusy] = React.useState(false)
+      const [sideMetaError, setSideMetaError] = React.useState(null)
+      const [labelFilter, setLabelFilter] = React.useState('')
+      const [dueDraft, setDueDraft] = React.useState('')
+
+      /** 读侧栏的候选名册（标签 / 里程碑 / 可指派用户）。失败留错误给面板显示，不抛。 */
+      const loadSideMeta = React.useCallback(async () => {
+        setSideMetaBusy(true)
+        const result = await api.repoMeta({
+          serverId: target.serverId,
+          owner: target.owner,
+          repo: target.repo,
+        })
+        setSideMetaBusy(false)
+        if (!result.ok) {
+          setSideMetaError(failureText(t, result))
+          return
+        }
+        setSideMetaError(null)
+        setSideMeta(result.data ?? EMPTY_META)
+      }, [api, t, target.serverId, target.owner, target.repo])
 
       /** 正文与所有评论里引用到的附件图（去重；重渲染时 key 稳定，不会重复取）。 */
       const imageUuids = detail === null
@@ -2558,6 +2641,172 @@ window.__ModuleLoader__.load({
 
       const issue = detail.issue
       const reference = `${issue.owner ?? target.owner}/${issue.repo ?? target.repo}#${issue.index}`
+
+      /**
+       * 展开 / 收起属性栏某组：展开时才去读候选名册（只看详情不该多打三个请求），
+       * 截止日顺手把当前值填进输入框。
+       * @param name - `labels` / `assignees` / `milestone` / `due`。
+       * @returns 无。
+       */
+      const openSide = (name) => {
+        const next = side === name ? null : name
+        setSide(next)
+        setSideMetaError(null)
+        if (next === null) return
+        if (next === 'due') setDueDraft(typeof issue.dueDate === 'string' ? issue.dueDate.slice(0, 10) : '')
+        // 截止日不需要候选名册；其余三组第一次展开时才去读。
+        if (next !== 'due' && sideMeta === null && sideMetaBusy === false) void loadSideMeta()
+      }
+
+      /**
+       * 侧栏的一次就地保存：复用 `act`（忙碌 / 失败横幅 / 重读详情一起处理），成功后再通知
+       * 外层（列表里的标签、指派跟着变）。
+       * @param label - 忙碌标记（也是探针认的 `data-gti-side-*` 之外的文案标签）。
+       * @param op - 桥上的操作名。
+       * @param params - 操作参数（`target` / `index` 由这里补）。
+       * @returns 是否成功。
+       */
+      const sideSave = (label, op, params) => act(
+        label,
+        () => api.gitea(op, { ...target, index: issue.index, ...params }),
+        { onChanged: true },
+      )
+
+      /** 点一个标签：切换后整体替换（`issue.edit` 的 EditIssueOption 没有 labels）。 */
+      const toggleLabel = (labelId) => {
+        // 出线形状里 id 可能是 null（上游没给）；没有 id 就没法拼 labels，别拼出一个 `null`。
+        if (typeof labelId !== 'number') return Promise.resolve(false)
+        const current = issue.labels.map((label) => label.id).filter((id) => typeof id === 'number')
+        const labels = current.includes(labelId)
+          ? current.filter((id) => id !== labelId)
+          : [...current, labelId]
+        return sideSave('labels', 'issue.labels.set', { labels })
+      }
+
+      /** 点一个用户：已指派就移除，未指派就加上（Gitea 的指派也是按增删两个端点做差分）。 */
+      const toggleAssignee = (login) => {
+        if (typeof login !== 'string' || login === '') return Promise.resolve(false)
+        const assigned = issue.assignees.some((user) => user.login === login)
+        return sideSave('assignees', assigned ? 'issue.assignees.remove' : 'issue.assignees.add', {
+          assignees: [login],
+        })
+      }
+
+      /** 侧栏候选（名册未到位时一律空数组，渲染只认「有没有」）。 */
+      const sideLabels = sideMeta === null ? [] : (sideMeta.labels ?? [])
+      const sideAssignables = sideMeta === null ? [] : (sideMeta.assignees ?? [])
+      const sideMilestones = sideMeta === null ? [] : (sideMeta.milestones ?? [])
+      const sideChosenLabels = new Set(issue.labels.map((label) => label.id))
+      const sideChosenAssignees = new Set(issue.assignees.map((user) => user.login))
+      const sideFilter = labelFilter.trim().toLowerCase()
+      const visibleLabels = sideFilter === ''
+        ? sideLabels
+        : sideLabels.filter((label) => String(label.name ?? '').toLowerCase().includes(sideFilter))
+
+      /**
+       * 侧栏编辑面板的公共外壳：错误横幅 / 加载中 / 正文 / 一句「点选即保存」。
+       * @param name - 组名（写进 `data-gti-side-panel`，探针按它定位）。
+       * @param body - 名册到位后画什么。
+       * @param needsRoster - 是否需要候选名册（截止日不需要，别让它等一个无关的请求）。
+       * @returns 面板节点。
+       */
+      const sidePanel = (name, body, needsRoster = true) => h('div', {
+        className: 'dsh-gti-side-panel',
+        'data-gti-side-panel': name,
+      },
+        needsRoster && sideMetaError !== null
+          ? h(Banner, { tone: 'error', text: t('side.metaFailed', { message: sideMetaError }) })
+          : null,
+        needsRoster && sideMeta === null
+          ? (sideMetaBusy
+            ? h('div', { className: 'dsh-gti-note', 'data-gti-side-loading': 'true' }, t('common.loading'))
+            : null)
+          : body(),
+        h('div', { className: 'dsh-gti-note' }, t('side.hint')))
+
+      /** 标签面板：筛选框 + 一排可点标签（点一下整体替换，调色点照 Gitea 用标签自己的颜色）。 */
+      const labelsPanel = () => (sideLabels.length === 0
+        ? h('div', { className: 'dsh-gti-note', 'data-gti-side-roster-empty': 'labels' }, t('side.emptyLabels'))
+        : h('div', { className: 'dsh-gti-side-panel-body' },
+          h('input', {
+            className: 'dsh-gti-input',
+            value: labelFilter,
+            placeholder: t('side.filter'),
+            'data-gti-side-filter': 'true',
+            onChange: (event) => setLabelFilter(event.target.value),
+          }),
+          visibleLabels.length === 0
+            ? h('div', { className: 'dsh-gti-note' }, t('side.noMatch'))
+            : h('div', { className: 'dsh-gti-choices' }, visibleLabels.map((label) => h('span', {
+              key: label.id,
+              className: 'dsh-gti-choice',
+              'data-on': sideChosenLabels.has(label.id) ? 'true' : 'false',
+              'data-gti-label-choice': String(label.id),
+              onClick: () => { if (busy === null) void toggleLabel(label.id) },
+            },
+              h('span', { className: 'dsh-gti-label-dot', style: labelDotStyle(label.color) }),
+              label.name)))))
+
+      /** 指派面板：一排可点用户（已指派的点一下移除，未指派的点一下加上）。 */
+      const assigneesPanel = () => (sideAssignables.length === 0
+        ? h('div', { className: 'dsh-gti-note', 'data-gti-side-roster-empty': 'assignees' }, t('side.emptyAssignees'))
+        : h('div', { className: 'dsh-gti-choices' }, sideAssignables.map((user) => h('span', {
+          key: user.login,
+          className: 'dsh-gti-choice',
+          'data-on': sideChosenAssignees.has(user.login) ? 'true' : 'false',
+          'data-gti-assignee-choice': user.login,
+          onClick: () => { if (busy === null) void toggleAssignee(user.login) },
+        }, `@${user.login}`))))
+
+      /**
+       * 里程碑面板：下拉选一个就保存。**不提供「清除」**：Gitea 的 EditIssueOption 只有
+       * `milestone`（int64 id），把 id 送 0 是否等于清空在 1.27 上没法离线确认；宁可少一个按钮，
+       * 也不发一个可能被上游拒掉的请求（编辑表单那边同样只能选、不能清）。
+       */
+      const milestonePanel = () => (sideMilestones.length === 0
+        ? h('div', { className: 'dsh-gti-note', 'data-gti-side-roster-empty': 'milestones' }, t('side.emptyMilestones'))
+        : h('select', {
+          className: 'dsh-gti-select',
+          value: issue.milestone === null ? '' : String(issue.milestone.id),
+          disabled: busy !== null,
+          'data-gti-side-milestone': 'true',
+          onChange: (event) => {
+            const next = event.target.value
+            if (next === '') return
+            void sideSave('milestone', 'issue.edit', { milestone: Number(next) })
+          },
+        }, [h('option', { key: '', value: '' }, t('side.pickMilestone'))].concat(
+          sideMilestones.map((milestone) => h('option', {
+            key: milestone.id,
+            value: String(milestone.id),
+          }, milestone.title)),
+        )))
+
+      /** 截止日面板：日期框 + 保存 / 清除（清空走 `unset_due_date`，上游明确支持）。 */
+      const duePanel = () => h('div', { className: 'dsh-gti-side-panel-body' },
+        h('input', {
+          className: 'dsh-gti-input',
+          type: 'date',
+          value: dueDraft,
+          disabled: busy !== null,
+          'data-gti-side-due': 'true',
+          onChange: (event) => setDueDraft(event.target.value),
+        }),
+        h('div', { className: 'dsh-gti-side-add' },
+          h('button', {
+            type: 'button',
+            className: 'dsh-gti-button',
+            disabled: busy !== null || dueDraft === '',
+            'data-gti-side-due-save': 'true',
+            onClick: () => void sideSave('due', 'issue.edit', { due_date: dueDraft }),
+          }, t('common.save')),
+          h('button', {
+            type: 'button',
+            className: 'dsh-gti-button',
+            disabled: busy !== null,
+            'data-gti-side-due-clear': 'true',
+            onClick: () => void sideSave('due', 'issue.edit', { unset_due_date: true }),
+          }, t('side.clearDue'))))
 
       /** 侧栏「引用」那一行的复制：剪贴板够不着时干脆什么都不做（不弹假的成功提示）。 */
       const copyReference = () => {
@@ -2847,28 +3096,59 @@ window.__ModuleLoader__.load({
 
               // 右栏：Gitea 的 issue 侧栏（标签 / 指派 / 里程碑 / 截止 / 参与者 / 依赖 / 工时 / 附件 / 引用 / 通知）。
               h('aside', { className: 'dsh-gti-issue-side', 'data-gti-side': 'true' },
-                h(SideGroup, { title: t('issue.labels') },
+                h(SideGroup, {
+                  title: t('issue.labels'),
+                  editing: side === 'labels',
+                  editAttr: 'labels',
+                  editTitle: side === 'labels' ? t('common.collapse') : t('side.edit'),
+                  onEdit: () => openSide('labels'),
+                  toolbar: issue.labels.length === 0
+                    ? null
+                    : h('span', { className: 'dsh-gti-note' }, String(issue.labels.length)),
+                },
                   issue.labels.length === 0
                     ? h('div', { className: 'dsh-gti-side-value', 'data-empty': 'true', 'data-gti-side-empty': 'labels' }, t('issue.noLabels'))
-                    : h('div', { className: 'dsh-gti-choices' }, h(LabelChips, { labels: issue.labels }))),
+                    : h('div', { className: 'dsh-gti-choices' }, h(LabelChips, { labels: issue.labels })),
+                  side === 'labels' ? sidePanel('labels', labelsPanel) : null),
 
-                h(SideGroup, { title: t('issue.assignees') },
+                h(SideGroup, {
+                  title: t('issue.assignees'),
+                  editing: side === 'assignees',
+                  editAttr: 'assignees',
+                  editTitle: side === 'assignees' ? t('common.collapse') : t('side.edit'),
+                  onEdit: () => openSide('assignees'),
+                },
                   issue.assignees.length === 0
                     ? h('div', { className: 'dsh-gti-side-value', 'data-empty': 'true', 'data-gti-side-empty': 'assignees' }, t('issue.noAssignees'))
                     : h('div', { className: 'dsh-gti-side-list' }, issue.assignees.map((user) => h('div', {
                       key: user.login,
                       className: 'dsh-gti-side-row',
-                    }, h(Avatar, { user }), h('span', null, `@${user.login}`))))),
+                    }, h(Avatar, { user }), h('span', null, `@${user.login}`)))),
+                  side === 'assignees' ? sidePanel('assignees', assigneesPanel) : null),
 
-                h(SideGroup, { title: t('issue.milestone') },
+                h(SideGroup, {
+                  title: t('issue.milestone'),
+                  editing: side === 'milestone',
+                  editAttr: 'milestone',
+                  editTitle: side === 'milestone' ? t('common.collapse') : t('side.edit'),
+                  onEdit: () => openSide('milestone'),
+                },
                   issue.milestone === null
                     ? h('div', { className: 'dsh-gti-side-value', 'data-empty': 'true' }, t('issue.noMilestone'))
-                    : h('div', { className: 'dsh-gti-side-value' }, `◎ ${issue.milestone.title}`)),
+                    : h('div', { className: 'dsh-gti-side-value' }, `◎ ${issue.milestone.title}`),
+                  side === 'milestone' ? sidePanel('milestone', milestonePanel) : null),
 
-                h(SideGroup, { title: t('issue.due') },
+                h(SideGroup, {
+                  title: t('issue.due'),
+                  editing: side === 'due',
+                  editAttr: 'due',
+                  editTitle: side === 'due' ? t('common.collapse') : t('side.edit'),
+                  onEdit: () => openSide('due'),
+                },
                   issue.dueDate === null
                     ? h('div', { className: 'dsh-gti-side-value', 'data-empty': 'true' }, t('issue.noDue'))
-                    : h('div', { className: 'dsh-gti-side-value' }, `⏱ ${shortTime(issue.dueDate)}`)),
+                    : h('div', { className: 'dsh-gti-side-value' }, `⏱ ${shortTime(issue.dueDate)}`),
+                  side === 'due' ? sidePanel('due', duePanel, false) : null),
 
                 detail.subscribers.length === 0 ? null : h(SideGroup, {
                   title: t('issue.participants'),

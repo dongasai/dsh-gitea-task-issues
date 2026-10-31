@@ -1666,6 +1666,134 @@ test('详情页：标签 / 指派 / 里程碑 / 截止为空时写空态文案�
   }
 })
 
+test('详情页：属性栏就地编辑标签——点铅笔展开、点一下整体替换（issue #4）', async () => {
+  const { fake, mini } = await newWorld()
+  const paint = () => mini.render(mini.React.createElement(globalBoardOf(fake), {}))
+  await openGlobalDetail(mini, fake)
+  assert.deepEqual(mini.errors, [])
+  // 只是看详情不该去读候选名册（多三个请求）。
+  assert.equal(calls.some((call) => call.op === 'repo.meta'), false, '没展开就先去读了名册')
+
+  // 铅笔：`data-gti-side-edit` 上写组名，探针按组名点。
+  findNode(mini, (node) => node.props?.['data-gti-side-edit'] === 'labels').props.onClick()
+  await settle()
+  await paint()
+  assert.deepEqual(mini.errors, [])
+  assert.ok(findNode(mini, (node) => node.props?.['data-gti-side-panel'] === 'labels'), '标签面板没展开')
+  assert.ok(calls.some((call) => call.op === 'repo.meta'), '展开后才该读取候选名册')
+
+  // 现有标签是 bug(1)，只读；enhancement(2) 可点。点完 = 整体替换成 [1,2]。
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-label-choice'] === '1').props['data-on'], 'true')
+  assert.equal(findNode(mini, (node) => node.props?.['data-gti-label-choice'] === '2').props['data-on'], 'false')
+
+  calls.length = 0
+  findNode(mini, (node) => node.props?.['data-gti-label-choice'] === '2').props.onClick()
+  await settle()
+  await paint()
+  assert.deepEqual(mini.errors, [])
+
+  const call = calls.find((item) => item.op === 'gitea.call' && item.params?.op === 'issue.labels.set')
+  assert.ok(call, `点标签没有发出 issue.labels.set：${JSON.stringify(calls)}`)
+  assert.deepEqual(call.params.params, {
+    serverId: 'srv-a',
+    owner: 'dongasai',
+    repo: 'mylike',
+    index: 12,
+    labels: [1, 2],
+  }, '标签必须整体替换（EditIssueOption 没有 labels 字段）')
+})
+
+test('详情页：属性栏就地编辑指派——已指派点一下移除，未指派点一下加上', async () => {
+  const { fake, mini } = await newWorld()
+  const paint = () => mini.render(mini.React.createElement(globalBoardOf(fake), {}))
+
+  /** 面板已经开着就别再点铅笔了 —— 铅笔是开关，点第二下会把面板收起来。 */
+  const clickAssignee = async () => {
+    if (findNode(mini, (node) => node.props?.['data-gti-side-panel'] === 'assignees') === undefined) {
+      findNode(mini, (node) => node.props?.['data-gti-side-edit'] === 'assignees').props.onClick()
+      await settle()
+      await paint()
+    }
+    assert.ok(findNode(mini, (node) => node.props?.['data-gti-side-panel'] === 'assignees'), '指派面板没展开')
+    findNode(mini, (node) => node.props?.['data-gti-assignee-choice'] === 'tester').props.onClick()
+    await settle()
+    await paint()
+    return calls.filter((item) => item.op === 'gitea.call' && item.params?.op?.startsWith('issue.assignees.'))
+  }
+
+  await openGlobalDetail(mini, fake)
+  calls.length = 0
+  let assigneeCalls = await clickAssignee()
+  assert.deepEqual(mini.errors, [])
+  assert.equal(assigneeCalls.length, 1)
+  assert.equal(assigneeCalls[0].params.op, 'issue.assignees.remove', '已指派的人点一下应当是移除')
+  assert.deepEqual(assigneeCalls[0].params.params.assignees, ['tester'])
+
+  const saved = FIXTURES.detail.issue.assignees
+  try {
+    FIXTURES.detail.issue.assignees = []
+    await paint()
+    calls.length = 0
+    assigneeCalls = await clickAssignee()
+    assert.equal(assigneeCalls[0].params.op, 'issue.assignees.add', '没指派的人点一下应当是添加')
+    assert.deepEqual(assigneeCalls[0].params.params.assignees, ['tester'])
+  } finally {
+    FIXTURES.detail.issue.assignees = saved
+  }
+})
+
+test('详情页：属性栏就地编辑里程碑——选一个发 issue.edit（milestone 是 id）', async () => {
+  const { fake, mini } = await newWorld()
+  const paint = () => mini.render(mini.React.createElement(globalBoardOf(fake), {}))
+  await openGlobalDetail(mini, fake)
+
+  findNode(mini, (node) => node.props?.['data-gti-side-edit'] === 'milestone').props.onClick()
+  await settle()
+  await paint()
+  assert.deepEqual(mini.errors, [])
+  const select = findNode(mini, (node) => node.props?.['data-gti-side-milestone'] === 'true')
+  assert.ok(select, '里程碑面板缺下拉')
+  assert.equal(select.props.value, '7', '当前里程碑要预选')
+
+  calls.length = 0
+  select.props.onChange({ target: { value: '7' } })
+  await settle()
+  const call = calls.find((item) => item.op === 'gitea.call' && item.params?.op === 'issue.edit')
+  assert.ok(call, `选里程碑没有发出 issue.edit：${JSON.stringify(calls)}`)
+  assert.equal(call.params.params.milestone, 7)
+  assert.equal(call.params.params.index, 12)
+})
+
+test('详情页：属性栏就地编辑截止日——保存发 due_date，清除发 unset_due_date', async () => {
+  const { fake, mini } = await newWorld()
+  const paint = () => mini.render(mini.React.createElement(globalBoardOf(fake), {}))
+  await openGlobalDetail(mini, fake)
+
+  findNode(mini, (node) => node.props?.['data-gti-side-edit'] === 'due').props.onClick()
+  await settle()
+  await paint()
+  assert.deepEqual(mini.errors, [])
+
+  const input = findNode(mini, (node) => node.props?.['data-gti-side-due'] === 'true')
+  assert.ok(input, '截止日面板缺日期框')
+  input.props.onChange({ target: { value: '2026-11-05' } })
+  await paint()
+
+  calls.length = 0
+  findNode(mini, (node) => node.props?.['data-gti-side-due-save'] === 'true').props.onClick()
+  await settle()
+  const saved = calls.find((item) => item.op === 'gitea.call' && item.params?.op === 'issue.edit')
+  assert.ok(saved, `保存截止日没有发出 issue.edit：${JSON.stringify(calls)}`)
+  assert.equal(saved.params.params.due_date, '2026-11-05')
+
+  calls.length = 0
+  findNode(mini, (node) => node.props?.['data-gti-side-due-clear'] === 'true').props.onClick()
+  await settle()
+  const cleared = calls.find((item) => item.op === 'gitea.call' && item.params?.op === 'issue.edit')
+  assert.ok(cleared, '清除截止日没有发出 issue.edit')
+  assert.equal(cleared.params.params.unset_due_date, true, '清空走 unset_due_date，不是空串')
+})
+
 test('详情页：依赖条目的「移除」发出 issue.dependencies.remove，dependsOn 是对端编号', async () => {
   const { fake, mini } = await newWorld()
   const paint = () => mini.render(mini.React.createElement(globalBoardOf(fake), {}))

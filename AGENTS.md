@@ -18,7 +18,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全部测试（142 个用例） | `node --test tests/*.test.mjs` |
+| 全部测试（146 个用例） | `node --test tests/*.test.mjs` |
 | 两半语法自检 | `node --check index.js && node --check client.js`（等价 `npm run check`） |
 | 查某个槽位的官方契约 | `node tools/slot-contract.mjs main sidebar.panellist` |
 
@@ -44,7 +44,7 @@
 | [lib/triggers.js](lib/triggers.js) | **纯函数**：账本 + issues + 评论 → 触发（矩阵的主战场） |
 | [lib/watchstore.js](lib/watchstore.js) | 自动分配账本 `watch.json`：schema、收敛、剪枝 |
 | [client.js](client.js) | 浏览器半边全部实现 |
-| [tests/](tests) | 假 Gitea + 迷你 React + 142 个用例（含槽位目录静态校验） |
+| [tests/](tests) | 假 Gitea + 迷你 React + 146 个用例（含槽位目录静态校验） |
 | [tools/slot-contract.mjs](tools/slot-contract.mjs) | 从本机 DSH 安装里抽客户端槽位契约 |
 | [docs/gitea-api-reference.md](docs/gitea-api-reference.md) | Gitea 1.27.3 issue 相关 API 参考（改操作表前先查它） |
 | [docs/auto-assign-design.md](docs/auto-assign-design.md) | 自动分配的设计稿：口径、账本、幂等闸门、边界 |
@@ -189,7 +189,14 @@
       不能点更糟），相邻的「移除」是真的（`dependsOn` 传对端编号）；
     - 复制类按钮走 `copyText()`（`navigator.clipboard` 只在安全上下文里有，局域网 http 下要退
       `execCommand`），**失败不报成功**；头像直连 `/avatars/…`、`onError` 退首字母圆片；
-    - 详情页不读 `repo.meta`（那是仓库级数字，只有表单要候选名册）。
+    - 详情页只在**第一组就地编辑展开时**读 `repo.meta`（标签 / 里程碑 / 可指派名册），读一次就缓存；
+      只为显示而进详情不该付这三个请求；
+    - **属性栏的标签 / 指派 / 里程碑 / 截止日可就地改**（issue #4）：铅笔在组头，面板长在组里
+      （半屏详情里浮层会被裁），一次只展开一组，点选即保存。接线三条别改：标签走
+      `issue.labels.set` 整体替换（`EditIssueOption` 没有 labels）；指派走 `assignees.add/remove`
+      差分（整体替换会抹掉别人刚做的改动）；截止日清空走 `unset_due_date`。**里程碑不给「清除」**：
+      `milestone` 只有 int64 id，送 0 是否等于清空没法离线确认，宁可少一个按钮 —— 这条与
+      「里程碑只能选不能清」一起写在 README 已知边界里。
 
 ## 代码风格
 
@@ -265,6 +272,10 @@ node --check index.js && node --check client.js
   复制引用、头像）→ 同步 README 的「界面长什么样 · 详情页」、「只能在浏览器里看的」第 5 / 8 /
   9 / 10 / 23 条、[IMPLEMENTATION.md](IMPLEMENTATION.md) 的「详情页：为什么照 Gitea 的 issue 页
   重排」与上面的约束 30；`tests/client.test.mjs` 里那批详情页用例跟着改。
+- **动「属性栏就地编辑」**（哪几组可改、铅笔位置、保存时机、名册懒读、里程碑不给清除）→ 同步
+  README 的「界面长什么样 · 详情页」、「只能在浏览器里看的」第 24 条、「已知边界」，
+  [IMPLEMENTATION.md](IMPLEMENTATION.md) 的「属性栏就地编辑」一节与上面的约束 30；
+  `tests/client.test.mjs` 里那四条就地编辑用例跟着改。
 - **改文案键** → `zh` 与 `en` 一起改（探针会拦）。
 - **已知边界**写在 README 末尾；**没真正解决之前不要从文档里删掉**。
 
